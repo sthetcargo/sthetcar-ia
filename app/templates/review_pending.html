@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sthetcar IA — Revisar conteúdo</title>
+<style>
+:root{--bg:#f5f6f8;--surface:#fff;--text:#16181d;--muted:#69707d;--border:#e5e7eb;--green:#087443;--green-bg:#eaf8f0;--red:#b42318;--red-bg:#fff1f0;--amber:#8a5a00;--amber-bg:#fff7df;--blue:#315bea}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}.shell{max-width:1240px;margin:auto;padding:28px 22px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:22px}.brand{font-weight:900;font-size:20px}.sub{color:var(--muted);font-size:13px;margin-top:4px}.badge{background:var(--amber-bg);color:var(--amber);border:1px solid #f1dfaa;padding:8px 11px;border-radius:999px;font-size:11px;font-weight:900}.grid{display:grid;grid-template-columns:minmax(360px,.95fr) minmax(450px,1.05fr);gap:20px;align-items:start}.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:20px;box-shadow:0 8px 24px rgba(16,24,40,.06);margin-bottom:16px}.preview{background:#f1f2f4;border-radius:15px;padding:14px}.media{display:grid;grid-template-columns:1fr 1fr;gap:5px;background:#111;padding:5px;border-radius:10px}.side{background:#111;border-radius:8px;overflow:hidden}.side h4{color:#fff;text-align:center;font-size:9px;margin:7px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:3px}.photos img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#111;display:block}.field{margin-bottom:14px}.field label{display:block;font-size:12px;font-weight:900;margin-bottom:6px}.field input,.field textarea{width:100%;box-sizing:border-box;border:1px solid #dfe3e8;border-radius:10px;padding:12px;font:inherit}.field textarea{min-height:150px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions{display:flex;gap:10px;flex-wrap:wrap}.btn{border:0;border-radius:11px;padding:12px 17px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center}.approve{background:#087443;color:#fff}.secondary{background:#eef0f3;color:#20242b}.danger{background:#fff;color:var(--red);border:1px solid #f1c5c0}.danger:hover{background:var(--red-bg)}.success{background:var(--green-bg);color:#09683e;border:1px solid #ccebd9;padding:14px;border-radius:12px;margin-bottom:16px}.note{color:var(--muted);font-size:12px;line-height:1.5;margin-top:12px}.editor-section{border:1px solid var(--border);border-radius:15px;padding:14px;margin:14px 0;background:#fbfcfd}.editor-section h3{font-size:14px;margin:0 0 5px}.editor-section p{font-size:11px;color:var(--muted);margin:0 0 12px}.photo-editor{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.photo-item{position:relative;border:1px solid #dfe3e8;border-radius:12px;background:#fff;padding:7px;cursor:grab;transition:.15s}.photo-item.dragging{opacity:.45;transform:scale(.98)}.photo-item.drop-target{outline:2px solid var(--blue);outline-offset:1px}.photo-item img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#111;border-radius:8px;display:block}.photo-number{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.75);color:#fff;border-radius:999px;padding:4px 7px;font-size:10px;font-weight:900}.remove-photo{position:absolute;right:12px;top:12px;width:26px;height:26px;border:0;border-radius:50%;background:rgba(0,0,0,.78);color:#fff;cursor:pointer;font-weight:900}.photo-hint{text-align:center;font-size:10px;color:#7c8490;margin:7px 0 0}.carousel-preview{margin-top:14px;border:1px solid var(--border);border-radius:15px;padding:14px;background:#111}.carousel-preview h3{color:#fff;font-size:12px;margin:0 0 10px}.carousel-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:3px}.carousel-item{position:relative;min-width:120px;width:120px}.carousel-item img{width:120px;height:90px;object-fit:contain;background:#222;border-radius:7px;display:block}.carousel-item span{position:absolute;left:5px;top:5px;background:rgba(0,0,0,.75);color:#fff;border-radius:999px;padding:3px 6px;font-size:9px;font-weight:900}.carousel-item b{display:block;color:#fff;font-size:9px;margin-top:4px;text-align:center}.warning{background:var(--amber-bg);color:var(--amber);border:1px solid #f1dfaa;padding:11px 12px;border-radius:11px;font-size:11px;line-height:1.45;margin:12px 0}.discard-box{border-top:1px solid var(--border);margin-top:18px;padding-top:15px}.discard-copy{font-size:11px;color:var(--muted);line-height:1.45;margin-bottom:9px}.rewrite-modal{display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;padding:20px}.rewrite-modal.open{display:flex}.rewrite-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.58)}.rewrite-dialog{position:relative;width:min(760px,100%);max-height:90vh;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.22)}.rewrite-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}.rewrite-kicker{font-size:11px;font-weight:900;color:var(--blue);letter-spacing:.05em}.rewrite-head h3{font-size:21px;margin:5px 0 6px}.rewrite-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}.rewrite-close{border:0;background:#eef0f3;width:34px;height:34px;border-radius:50%;font-size:23px;cursor:pointer;color:#333}.rewrite-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}.rewrite-option{border:1px solid #dfe3e8;background:#fff;border-radius:13px;padding:15px;text-align:left;cursor:pointer;transition:.15s}.rewrite-option:hover{border-color:var(--blue);background:#f7f9ff;transform:translateY(-1px)}.rewrite-option strong{display:block;font-size:14px;margin-bottom:5px}.rewrite-option span{display:block;color:var(--muted);font-size:12px;line-height:1.45}.rewrite-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}.rewrite-footer span{color:var(--muted);font-size:11px}@media(max-width:620px){.rewrite-options{grid-template-columns:1fr}.rewrite-dialog{padding:17px}.rewrite-footer{align-items:flex-start;flex-direction:column}}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}.photo-editor{grid-template-columns:repeat(2,minmax(0,1fr))}.review-editor{position:static}}@media(max-width:520px){.photo-editor{grid-template-columns:1fr}.media{grid-template-columns:1fr}}
+/* Mobile refinements: preserve desktop layout and make touch actions explicit. */
+@media (max-width: 680px){
+  html,body{width:100%;overflow-x:hidden}
+  .shell{width:100%;padding:14px 10px 42px}
+  .top{flex-direction:column;align-items:flex-start;gap:10px;margin-bottom:16px}
+  .brand{font-size:18px}.sub{font-size:12px}.badge{font-size:10px}
+  .grid{grid-template-columns:1fr;gap:12px}
+  .card{padding:14px;border-radius:15px}
+  .preview{padding:10px}.media{grid-template-columns:1fr;gap:8px}
+  .photos{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row{grid-template-columns:1fr}
+  .field input,.field textarea{font-size:16px;min-height:46px}
+  .field textarea{min-height:135px}
+  .actions{flex-direction:column;align-items:stretch}
+  .actions .btn{width:100%;justify-content:center;min-height:44px}
+  .photo-editor{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .photo-item{padding:6px;cursor:default}
+  .photo-move{display:flex;position:absolute;left:8px;bottom:27px;gap:4px;z-index:3}
+  .photo-move button{width:30px;height:30px;border:0;border-radius:8px;background:rgba(0,0,0,.78);color:#fff;font-weight:900;font-size:15px}
+  .remove-photo{right:8px;top:8px;width:30px;height:30px}
+  .photo-number{left:8px;top:8px}
+  .photo-hint{font-size:9px;margin:5px 0 0}
+  .carousel-preview{padding:11px}.carousel-item{min-width:105px;width:105px}.carousel-item img{width:105px;height:78px}
+  .rewrite-modal{padding:10px}.rewrite-dialog{width:100%;max-height:92vh;padding:15px;border-radius:15px}
+  .rewrite-head h3{font-size:19px}.rewrite-head p{font-size:12px}
+  .rewrite-options{grid-template-columns:1fr}
+  .rewrite-option{padding:13px;min-height:64px}
+  .rewrite-footer{align-items:stretch;flex-direction:column}.rewrite-footer .btn{width:100%;justify-content:center;min-height:44px}
+}
+@media (max-width: 420px){
+  .shell{padding-left:8px;padding-right:8px}
+  .photos{grid-template-columns:1fr}
+  .photo-editor{grid-template-columns:1fr 1fr}
+  .card h2{font-size:20px}
+}
+@media (min-width: 681px){.photo-move{display:none}}
+
+</style></head>
+<body><main class="shell">
+<header class="top"><div><div class="brand">🚗 Sthetcar AI</div><div class="sub">Revisão e organização antes da aprovação</div></div><span class="badge">🕐 AGUARDANDO APROVAÇÃO</span></header>
+{% if request.args.get("rewritten") %}<div class="success"><strong>Legenda reescrita com sucesso.</strong> A IA criou uma nova legenda e novas hashtags usando a mesma análise e as mesmas fotos.</div>{% elif request.args.get("rewrite_error") %}<div class="warning"><strong>Não foi possível reescrever a legenda.</strong> {{ request.args.get("rewrite_error") }}</div>{% endif %}<div class="success"><strong>Conteúdo preservado.</strong> A IA já terminou a análise e o trabalho ficou salvo. Você pode revisar, reorganizar ou descartar sem reenviar as fotos.</div>
+<div class="grid">
+<section class="card">
+  <h2>Prévia do post</h2>
+  <p class="sub">{{ result.vehicle or 'Veículo a confirmar' }} · {{ result.service or 'Serviço a confirmar' }}</p>
+  <div class="preview"><div class="media">
+    <div class="side"><h4>ANTES</h4><div class="photos" id="before-preview">{% for image in result.before_images %}<img src="{{ image|media_url }}" alt="Antes {{ loop.index }}">{% endfor %}</div></div>
+    <div class="side"><h4>DEPOIS</h4><div class="photos" id="after-preview">{% for image in result.after_images %}<img src="{{ image|media_url }}" alt="Depois {{ loop.index }}">{% endfor %}</div></div>
+  </div></div>
+  <div class="carousel-preview"><h3>📲 Sequência do carrossel no Instagram</h3><div class="carousel-strip" id="carousel-preview"></div></div>
+  <div class="warning">💡 <strong>Você controla a ordem.</strong> Arraste as fotos para mudar a posição. A sequência aprovada será preservada até a fila e a publicação.</div>
+</section>
+<section class="card">
+  <h2>Revisão e aprovação</h2>
+  <form method="post" action="{{ url_for('dashboard') }}" id="approval-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="approve"><input type="hidden" name="pending_id" value="{{ result.pending_id }}"><input type="hidden" name="analysis" value="{{ result.analysis }}">
+    <div class="row"><div class="field"><label>🚘 Veículo</label><input name="vehicle" value="{{ result.vehicle }}" required></div><div class="field"><label>🔧 Serviço</label><input name="service" value="{{ result.service }}" required></div></div>
+
+    <div class="editor-section"><h3>📷 Organizar fotos ANTES</h3><p>Arraste para mudar a ordem. Use ✕ para remover uma foto deste post.</p><div class="photo-editor" id="before-editor">
+      {% for image in result.before_images %}<div class="photo-item" draggable="true"><span class="photo-number">{{ loop.index }}</span><div class="photo-move"><button type="button" title="Mover para cima" data-move="-1">↑</button><button type="button" title="Mover para baixo" data-move="1">↓</button></div><button type="button" class="remove-photo" title="Remover foto">×</button><img src="{{ image|media_url }}" alt="Antes {{ loop.index }}"><input type="hidden" name="before_images" value="{{ image }}"><div class="photo-hint">Arraste</div></div>{% endfor %}
+    </div></div>
+
+    <div class="editor-section"><h3>✨ Organizar fotos DEPOIS</h3><p>Arraste para mudar a ordem. Use ✕ para remover uma foto deste post.</p><div class="photo-editor" id="after-editor">
+      {% for image in result.after_images %}<div class="photo-item" draggable="true"><span class="photo-number">{{ loop.index }}</span><div class="photo-move"><button type="button" title="Mover para cima" data-move="-1">↑</button><button type="button" title="Mover para baixo" data-move="1">↓</button></div><button type="button" class="remove-photo" title="Remover foto">×</button><img src="{{ image|media_url }}" alt="Depois {{ loop.index }}"><input type="hidden" name="after_images" value="{{ image }}"><div class="photo-hint">Arraste</div></div>{% endfor %}
+    </div></div>
+
+    <div class="field"><label>✍️ Legenda</label><textarea name="caption" required>{{ result.caption }}</textarea></div>
+    <div class="field"><label>#️⃣ Hashtags</label><textarea name="hashtags">{{ result.hashtags }}</textarea></div>
+    <div class="actions"><button class="btn approve" type="submit">✓ Aprovar conteúdo</button><a class="btn secondary" href="/">← Voltar</a></div>
+    <div class="note">🔒 Aprovar apenas salva o conteúdo. A publicação no Instagram continua sendo uma etapa separada e exige sua confirmação.</div>
+  </form>
+  <form method="post" action="{{ url_for('rewrite_pending_caption', pending_id=result.pending_id) }}" style="margin-top:10px" id="rewrite-form" onsubmit="return prepareRewrite();"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="vehicle" value="{{ result.vehicle }}">
+    <input type="hidden" name="service" value="{{ result.service }}">
+    <input type="hidden" name="current_caption" id="rewrite-current-caption" value="">
+    <input type="hidden" name="rewrite_angle" id="rewrite-angle" value="">
+    <button class="btn secondary" type="button" id="open-rewrite-chooser">🔄 Reescrever legenda com IA</button>
+  </form>
+  <div class="note">Escolha o foco da nova versão. As mesmas fotos e a análise visual serão mantidas; a IA criará uma legenda nova com outro ângulo.</div>
+
+  <div class="rewrite-modal" id="rewrite-modal" aria-hidden="true">
+    <div class="rewrite-backdrop" onclick="closeRewriteChooser()"></div>
+    <div class="rewrite-dialog" role="dialog" aria-modal="true" aria-labelledby="rewrite-title">
+      <div class="rewrite-head">
+        <div>
+          <div class="rewrite-kicker">✍️ NOVA VERSÃO</div>
+          <h3 id="rewrite-title">Como você quer que a legenda seja reescrita?</h3>
+          <p>Escolha o foco principal. A IA mantém os fatos do atendimento, mas muda a forma de contar a história.</p>
+        </div>
+        <button class="rewrite-close" type="button" onclick="closeRewriteChooser()" aria-label="Fechar">×</button>
+      </div>
+      <div class="rewrite-options">
+        <button type="button" class="rewrite-option" onclick="chooseRewriteAngle('problema_cliente')">
+          <strong>🎯 Problema do cliente</strong>
+          <span>Começa pela dor ou situação que o proprietário reconhece no próprio carro.</span>
+        </button>
+        <button type="button" class="rewrite-option" onclick="chooseRewriteAngle('processo_tecnico')">
+          <strong>🛠️ Processo técnico</strong>
+          <span>Valoriza o trabalho realizado, incluindo etapas como preparação, lixamento e polimento quando pertinentes.</span>
+        </button>
+        <button type="button" class="rewrite-option" onclick="chooseRewriteAngle('transformacao_antes_depois')">
+          <strong>✨ Transformação Antes × Depois</strong>
+          <span>Coloca o contraste visual e o resultado do serviço no centro da narrativa.</span>
+        </button>
+        <button type="button" class="rewrite-option" onclick="chooseRewriteAngle('beneficios')">
+          <strong>💡 Benefícios</strong>
+          <span>Destaca o que o cliente ganha com o serviço, sem promessas exageradas.</span>
+        </button>
+        <button type="button" class="rewrite-option" onclick="chooseRewriteAngle('educativa')">
+          <strong>📚 Educativa</strong>
+          <span>Explica de forma simples o problema e por que o tratamento faz diferença.</span>
+        </button>
+        <button type="button" class="rewrite-option" onclick="chooseRewriteAngle('comercial')">
+          <strong>📣 Comercial</strong>
+          <span>Mais voltada para despertar interesse e levar o cliente ao orçamento ou agendamento.</span>
+        </button>
+      </div>
+      <div class="rewrite-footer">
+        <span>Você pode escolher um foco diferente a cada nova reescrita.</span>
+        <button class="btn secondary" type="button" onclick="closeRewriteChooser()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+  <div class="discard-box">
+    <div class="discard-copy"><strong>Não gostou deste resultado?</strong><br>Descartar remove o conteúdo da fila de aprovação e as fotos pendentes deste trabalho. Nada será publicado.</div>
+    <form method="post" action="{{ url_for('discard_pending', pending_id=result.pending_id) }}" onsubmit="return confirm('Descartar este conteúdo? As fotos pendentes serão removidas do fluxo e nada será publicado.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn danger" type="submit">🗑️ Descartar este post</button>
+    </form>
+  </div>
+</section></div></main>
+<script>
+function prepareRewrite(){
+  const caption=document.querySelector('textarea[name="caption"]');
+  const target=document.getElementById('rewrite-current-caption');
+  if(target) target.value=caption ? caption.value : '';
+  const angle=document.getElementById('rewrite-angle');
+  return !!(angle && angle.value);
+}
+function openRewriteChooser(){
+  const modal=document.getElementById('rewrite-modal');
+  if(!modal) return;
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden','false');
+  document.body.style.overflow='hidden';
+}
+function closeRewriteChooser(){
+  const modal=document.getElementById('rewrite-modal');
+  if(modal){ modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+}
+function chooseRewriteAngle(angle){
+  const target=document.getElementById('rewrite-angle');
+  if(target) target.value=angle;
+  closeRewriteChooser();
+  const form=document.getElementById('rewrite-form');
+  if(form) form.requestSubmit();
+}
+document.addEventListener('keydown', function(event){
+  if(event.key==='Escape') closeRewriteChooser();
+});
+const rewriteChooserButton=document.getElementById('open-rewrite-chooser');
+if(rewriteChooserButton){ rewriteChooserButton.addEventListener('click', openRewriteChooser); }
+(function(){
+  const groups=[document.getElementById('before-editor'),document.getElementById('after-editor')].filter(Boolean);
+  let dragged=null;
+  function refresh(){
+    groups.forEach(group=>{
+      [...group.querySelectorAll('.photo-item')].forEach((card,i)=>{const n=card.querySelector('.photo-number');if(n)n.textContent=i+1;});
+    });
+    const before=[...document.querySelectorAll('#before-editor .photo-item')];
+    const after=[...document.querySelectorAll('#after-editor .photo-item')];
+    const strip=document.getElementById('carousel-preview'); strip.innerHTML='';
+    const max=Math.max(before.length,after.length);
+    let pos=1;
+    for(let i=0;i<max;i++){
+      for(const [arr,label] of [[before,'ANTES'],[after,'DEPOIS']]){
+        if(!arr[i])continue;
+        const img=arr[i].querySelector('img');
+        const wrap=document.createElement('div');wrap.className='carousel-item';
+        wrap.innerHTML='<span>'+pos+'</span><img src="'+img.src+'" alt="'+label+'"><b>'+label+'</b>';
+        strip.appendChild(wrap);pos++;
+      }
+    }
+    document.getElementById('before-preview').innerHTML=before.map(c=>'<img src="'+c.querySelector('img').src+'" alt="Antes">').join('');
+    document.getElementById('after-preview').innerHTML=after.map(c=>'<img src="'+c.querySelector('img').src+'" alt="Depois">').join('');
+  }
+  groups.forEach(group=>{
+    group.addEventListener('dragstart',e=>{const card=e.target.closest('.photo-item');if(!card)return;dragged=card;card.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    group.addEventListener('dragend',()=>{if(dragged)dragged.classList.remove('dragging');dragged=null;group.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));refresh();});
+    group.addEventListener('dragover',e=>{e.preventDefault();const target=e.target.closest('.photo-item');if(!dragged||!target||target===dragged)return;target.classList.add('drop-target');const rect=target.getBoundingClientRect();const before=e.clientY<rect.top+rect.height/2;group.insertBefore(dragged,before?target:target.nextSibling);});
+    group.addEventListener('dragleave',e=>{const target=e.target.closest('.photo-item');if(target)target.classList.remove('drop-target');});
+    group.addEventListener('drop',e=>{e.preventDefault();group.querySelectorAll('.drop-target').forEach(x=>x.classList.remove('drop-target'));refresh();});
+    group.addEventListener('click',e=>{const btn=e.target.closest('.remove-photo');if(!btn)return;const cards=group.querySelectorAll('.photo-item');if(cards.length<=1){alert('É necessário manter pelo menos 1 foto neste lado.');return;}btn.closest('.photo-item').remove();refresh();});
+  });
+  document.querySelectorAll('.photo-move button[data-move]').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      e.preventDefault();
+      const card=btn.closest('.photo-item');
+      const group=card?.parentElement;
+      if(!card||!group)return;
+      const dir=Number(btn.dataset.move||0);
+      const items=[...group.querySelectorAll('.photo-item')];
+      const i=items.indexOf(card);
+      if(i<0)return;
+      const target=items[i+dir];
+      if(!target)return;
+      if(dir<0)group.insertBefore(card,target);
+      else group.insertBefore(target,card);
+      refresh();
+    });
+  });
+
+  document.getElementById('approval-form').addEventListener('submit',e=>{
+    const b=document.querySelectorAll('#before-editor .photo-item').length,a=document.querySelectorAll('#after-editor .photo-item').length;
+    if(!b||!a){e.preventDefault();alert('Mantenha pelo menos 1 foto em ANTES e 1 em DEPOIS.');return;}
+    refresh();
+  });
+  refresh();
+})();
+</script></body></html>

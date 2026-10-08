@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sthetcar IA — Central de publicação V28</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f6f8;color:#20242b;margin:0}.wrap{max-width:1100px;margin:0 auto;padding:32px}.top{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:22px}.back{color:#3851d6;text-decoration:none;font-weight:800}.card{background:#fff;border:1px solid #e1e3e8;border-radius:18px;padding:22px;box-shadow:0 8px 25px rgba(0,0,0,.04);margin-bottom:18px}.badge{display:inline-block;padding:7px 10px;border-radius:999px;background:#fff4d8;color:#805900;font-size:12px;font-weight:900}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.photos{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;background:#111;padding:5px;border-radius:14px}.photos img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#111;border-radius:6px}.label{font-size:11px;font-weight:900;margin:0 0 8px;color:#66707d}.box{background:#fafbfc;border:1px solid #e4e6ea;border-radius:12px;padding:14px;white-space:pre-wrap;line-height:1.5}.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.btn{display:inline-block;padding:13px 18px;border:0;border-radius:11px;background:#111;color:#fff;font-weight:900;cursor:pointer;text-decoration:none}.btn.secondary{background:#eef0f3;color:#333}.btn.green{background:#18794e}.btn.blue{background:#3158c9}.btn.publish{background:#b42318}.notice{padding:14px;border-radius:12px;background:#fff8e8;border:1px solid #f1dfaa;color:#6d5200;line-height:1.5;margin-top:14px}.success{background:#e9f8ef;border-color:#b9e6c8;color:#166534}.error{background:#fff0f0;border-color:#f0c5c5;color:#9b1c1c}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0}.step{padding:10px;border-radius:10px;background:#eef0f3;font-size:12px;font-weight:800;text-align:center;color:#68707c}.step.done{background:#e9f8ef;color:#166534}.step.current{background:#e8edff;color:#2947bd}.draft{border:2px solid #d6e8dd;background:#fbfffc}.mini{font-size:12px;color:#66707d}.check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;font-size:13px}.check b{color:#166534}@media(max-width:800px){.grid{grid-template-columns:1fr}.wrap{padding:18px}.steps{grid-template-columns:1fr 1fr}.top{align-items:flex-start;flex-direction:column}}
+@media (max-width: 680px){
+  html,body{width:100%;overflow-x:hidden}
+  .wrap{width:100%;padding:14px 10px 45px}
+  .top{gap:10px;margin-bottom:16px}.top h1{font-size:24px;line-height:1.15}.top p{font-size:12px}
+  .card{padding:14px;border-radius:15px;margin-bottom:12px}
+  .grid{grid-template-columns:1fr;gap:12px}
+  .photos{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .steps{grid-template-columns:1fr 1fr;gap:7px}.step{min-height:42px;display:flex;align-items:center;justify-content:center}
+  .actions{flex-direction:column;align-items:stretch}.actions form,.actions .btn,.actions a.btn{width:100%}.btn{width:100%;min-height:46px;display:flex;align-items:center;justify-content:center;text-align:center}
+  .box{font-size:13px;overflow-wrap:anywhere}
+  .notice{font-size:12px}
+}
+@media (max-width: 420px){
+  .wrap{padding-left:8px;padding-right:8px}
+  .photos{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+}
+
+</style></head>
+<body><main class="wrap">
+<div class="top"><div><h1>📲 Central de publicação no Instagram</h1><p>Valide a conta e publique conteúdos aprovados com confirmação. <strong>Nenhuma publicação acontece sem sua aprovação.</strong></p></div><div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><a class="back" href="{{ url_for('publication_queue') }}">📋 Fila de publicações</a><a class="back" href="{{ url_for('dashboard') }}#historico">← Voltar ao histórico</a></div></div>
+
+<div class="card">
+<div class="steps"><div class="step done">✓ 1. Post aprovado</div><div class="step {% if connection and connection.username %}done{% else %}current{% endif %}">{% if connection and connection.username %}✓{% else %}2.{% endif %} Instagram</div><div class="step {% if draft and draft.container_id %}done{% else %}current{% endif %}">{% if draft and draft.container_id %}✓{% else %}3.{% endif %} Mídia</div><div class="step {% if draft and draft.status == 'PUBLICADO NO INSTAGRAM' %}done{% else %}current{% endif %}">{% if draft and draft.status == 'PUBLICADO NO INSTAGRAM' %}✓{% else %}4.{% endif %} Publicação</div></div>
+{% if connection and connection.username %}<span class="badge" style="background:#e9f8ef;color:#166534">🟢 Instagram conectado</span>{% else %}<span class="badge">🟡 Instagram desconectado</span>{% endif %}
+<h2>{% if post %}Post selecionado{% else %}Nenhum post selecionado{% endif %}</h2>
+{% if post %}
+<p><strong>{{ post.vehicle or 'Veículo não informado' }}</strong> · {{ post.service or 'Serviço não informado' }}</p>
+<div class="grid"><div><div class="label">ANTES</div><div class="photos">{% for image in post.before_images or [post.before_image] %}{% if image %}<img src="{{ image|media_url }}">{% endif %}{% endfor %}</div></div><div><div class="label">DEPOIS</div><div class="photos">{% for image in post.after_images or [post.after_image] %}{% if image %}<img src="{{ image|media_url }}">{% endif %}{% endfor %}</div></div></div>
+<h3>Legenda</h3><div class="box">{{ post.caption }}</div><h3>Hashtags</h3><div class="box">{{ post.hashtags or 'Nenhuma hashtag informada.' }}</div>
+
+{% if connected %}<div class="notice success">✅ <strong>Instagram autorizado.</strong> A conta <strong>@{{ connection.username }}</strong> foi autorizada pelo Instagram.</div>{% endif %}
+{% if validated %}<div class="notice success">🟢 <strong>Validação concluída.</strong> O sistema consultou o perfil do Instagram e confirmou que o token salvo continua válido.</div>{% endif %}
+{% if prepared %}<div class="notice success">📦 <strong>Conteúdo preparado.</strong> O rascunho foi salvo localmente e <strong>nenhuma publicação foi executada</strong>.</div>{% endif %}
+{% if media_tested %}<div class="notice success">🧪 <strong>Mídia aceita pelo Instagram.</strong> O container foi criado e testado, mas <strong>a publicação ainda não foi executada</strong>.</div>{% endif %}
+{% if published %}<div class="notice success">🚀 <strong>Publicado com sucesso.</strong> O Instagram retornou o ID da mídia publicada.</div>{% endif %}
+{% if already_published %}<div class="notice success">🛡️ <strong>Este post já foi publicado.</strong> A V28 encontrou o registro da publicação e bloqueou uma nova publicação para evitar duplicidade.</div>{% endif %}
+{% if setup_missing %}<div class="notice">⚙️ <strong>Configuração pendente:</strong> ainda faltam as credenciais do app Meta no arquivo <code>.env</code>.</div>{% endif %}
+{% if oauth_error %}<div class="notice error">❌ <strong>Não foi possível concluir:</strong> {{ oauth_error }}</div>{% endif %}
+{% if disconnected %}<div class="notice">🔌 A conexão local foi removida deste computador.</div>{% endif %}
+
+{% if connection and connection.username %}
+<div class="card" style="margin-top:18px;background:#fafbfc;box-shadow:none">
+<h3 style="margin-top:0">🔎 Validação da conta</h3>
+<div class="check"><span>✓</span><div><b>Conta:</b> @{{ connection.username }}</div></div>
+{% if connection.user_id %}<div class="check"><span>✓</span><div><b>ID:</b> {{ connection.user_id }}</div></div>{% endif %}
+{% if connection.account_type %}<div class="check"><span>✓</span><div><b>Tipo:</b> {{ connection.account_type }}</div></div>{% endif %}
+{% if connection.validated_at %}<div class="mini">Última validação: {{ connection.validated_at.replace('T',' ') }}</div>{% endif %}
+
+<div class="card" style="margin-top:18px;">
+  <h2>🧾 Registro da publicação</h2>
+  <p>Quando uma publicação for concluída, a V28 registra localmente o post, veículo, serviço, data e ID retornado pelo Instagram.</p>
+  <p><strong>Segurança:</strong> trocar de post não reutiliza automaticamente a publicação de outro conteúdo.</p>
+</div>
+<div class="actions"><form method="post" action="{{ url_for('instagram_validate') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}" action="{{ url_for('instagram_validate') }}"><button class="btn secondary" type="submit">🔎 Validar conexão novamente</button></form></div>
+</div>
+{% endif %}
+
+<div class="actions">
+{% if connection and connection.username %}
+{% if already_published %}
+<span class="btn green">🛡️ PUBLICAÇÃO BLOQUEADA — JÁ PUBLICADO</span>
+{% else %}
+<form method="post" action="{{ url_for('instagram_prepare') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn green" type="submit">📦 Preparar publicação</button></form>
+{% if draft and draft.status == 'PUBLICADO NO INSTAGRAM' %}
+<span class="btn green">✅ PUBLICADO NO INSTAGRAM</span>
+{% elif draft and draft.container_id %}
+<form method="post" action="{{ url_for('instagram_publish') }}" onsubmit="return confirm('ATENÇÃO: publicar agora no Instagram @{{ connection.username }}? Esta ação é REAL e o post será enviado para o Instagram.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><input type="hidden" name="confirm" value="yes"><button class="btn publish" type="submit">🚀 PUBLICAR NO INSTAGRAM</button></form>
+{% else %}
+<form method="post" action="{{ url_for('instagram_test_media') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn blue" type="submit">🧪 Preparar e testar mídia (sem publicar)</button></form>
+{% endif %}
+{% endif %}
+<form method="post" action="{{ url_for('instagram_disconnect') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">🔌 Desconectar Instagram</button></form>
+{% elif meta_ready %}
+<a class="btn" href="{{ url_for('instagram_login') }}">🔗 Conectar Instagram com a Meta</a>
+{% else %}
+<button class="btn secondary" disabled>🔗 Conectar Instagram — configurar Meta primeiro</button>
+{% endif %}
+</div>
+
+<div class="notice">🔒 <strong>Regra de segurança V28:</strong> preparar e testar a mídia <strong>não publica</strong>. A publicação real só acontece no botão vermelho, exige confirmação explícita e só aceita o rascunho correspondente ao post aprovado atual.</div>
+
+{% if draft %}
+<div class="card draft" style="margin-top:18px;box-shadow:none">
+<h3 style="margin-top:0">📋 Rascunho pronto</h3>
+<p><strong>Status:</strong> {{ draft.status }}</p>
+<p><strong>Conta:</strong> @{{ draft.instagram.username }}</p>
+<p><strong>Veículo:</strong> {{ draft.vehicle or 'Não informado' }} · <strong>Serviço:</strong> {{ draft.service or 'Não informado' }}</p>
+<div class="label">TEXTO FINAL</div><div class="box">{{ draft.full_caption }}</div>
+<p class="mini">Preparado em {{ draft.prepared_at.replace('T',' ') }}. As fotos e a legenda permanecem vinculadas ao post aprovado localmente.</p>
+{% if draft.container_id %}<div class="check"><span>✓</span><div><b>Container Instagram:</b> {{ draft.container_id }}</div></div>{% endif %}
+{% if draft.container_status %}<div class="check"><span>✓</span><div><b>Status da mídia:</b> {{ draft.container_status.status_code or 'consultado' }}{% if draft.container_status.status %} — {{ draft.container_status.status }}{% endif %}</div></div>{% endif %}
+{% if draft.published_media_id %}<div class="check"><span>✓</span><div><b>ID publicado:</b> {{ draft.published_media_id }}</div></div>{% endif %}
+</div>
+{% endif %}
+{% else %}
+<p>Volte ao histórico e clique em <strong>📲 Preparar para Instagram</strong> em um post aprovado.</p>
+{% endif %}
+</div></main></body></html>

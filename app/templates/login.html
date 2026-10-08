@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sthetcar IA — Entrar</title>
+<style>
+body{font-family:Arial,sans-serif;background:#111;color:#eee;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.card{width:min(420px,90vw);background:#1d1d1d;border:1px solid #333;border-radius:16px;padding:28px;box-sizing:border-box;box-shadow:0 12px 40px #0008}
+h1{margin:0 0 8px}.muted{color:#aaa;margin-bottom:24px}label{display:block;margin:14px 0 6px;font-weight:600}input{width:100%;box-sizing:border-box;padding:12px;border-radius:9px;border:1px solid #444;background:#111;color:#fff}button{width:100%;margin-top:20px;padding:12px;border:0;border-radius:9px;background:#fff;color:#111;font-weight:700;cursor:pointer}.error{background:#4a1919;border:1px solid #7a2929;padding:10px;border-radius:8px;margin-bottom:15px}
+@media(max-width:520px){
+  body{padding:14px;min-height:100svh}
+  .card{width:100%;max-width:420px;padding:22px;border-radius:14px}
+  h1{font-size:25px}
+  input{font-size:16px;min-height:46px}
+  button{min-height:46px}
+}
+
+</style></head>
+<body><main class="card"><h1>Sthetcar IA</h1><div class="muted">Acesso administrativo</div>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ next }}">
+<label for="username">Usuário</label><input id="username" name="username" autocomplete="username" required autofocus>
+<label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required>
+<button type="submit">Entrar</button></form></main></body></html>

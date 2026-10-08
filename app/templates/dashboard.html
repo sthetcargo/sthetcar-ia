@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sthetcar AI — Revisão e Aprovação</title>
+  <style>
+    :root{
+      --bg:#f5f6f8;--surface:#fff;--surface-2:#fafbfc;--text:#16181d;--muted:#69707d;
+      --border:#e5e7eb;--dark:#17191f;--dark-2:#242831;--green:#087443;--green-bg:#eaf8f0;
+      --blue:#315bea;--blue-bg:#eef2ff;--amber:#9a6500;--amber-bg:#fff7df;--red:#b42318;--red-bg:#fff1f0;
+      --shadow:0 18px 50px rgba(16,24,40,.08);--shadow-sm:0 5px 18px rgba(16,24,40,.06);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+    button,input,textarea{font:inherit}
+    .shell{max-width:1240px;margin:0 auto;padding:28px 24px 70px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand-mark{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#17191f,#343943);display:grid;place-items:center;font-size:23px;box-shadow:var(--shadow-sm)}
+    .brand h1{font-size:20px;line-height:1;margin:0 0 5px;letter-spacing:-.3px}.brand p{margin:0;color:var(--muted);font-size:13px}
+    .status-pill{display:flex;align-items:center;gap:8px;padding:9px 13px;border:1px solid var(--border);background:var(--surface);border-radius:999px;font-size:13px;font-weight:800;box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s}.status-pill:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(16,24,40,.10)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#f0b429;box-shadow:0 0 0 4px #fff5d8}
+    .hero{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:24px}
+    .eyebrow{color:var(--blue);font-size:12px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;margin-bottom:8px}
+    .hero h2{font-size:34px;line-height:1.08;letter-spacing:-1.1px;margin:0 0 9px}.hero p{color:var(--muted);margin:0;max-width:680px;line-height:1.55}
+    .steps{display:flex;align-items:center;gap:0;margin:0 0 26px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 16px;box-shadow:var(--shadow-sm)}
+    .step{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:800;color:#8a909b;white-space:nowrap}.step .num{width:27px;height:27px;border-radius:50%;display:grid;place-items:center;background:#eef0f3;color:#6b7280;font-size:12px}
+    .step.active{color:var(--text)}.step.active .num{background:var(--dark);color:#fff}.step.done{color:var(--green)}.step.done .num{background:var(--green);color:#fff}.connector{height:1px;background:var(--border);flex:1;margin:0 12px;min-width:16px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow-sm);padding:24px;margin-bottom:18px}
+    .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}.card-head h3{margin:0 0 5px;font-size:19px;letter-spacing:-.3px}.card-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+    .tag{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);font-size:11px;font-weight:900;color:#555d69;white-space:nowrap}
+    .upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.upload-box{position:relative;border:1.5px dashed #cfd4dc;border-radius:16px;padding:18px;background:var(--surface-2);transition:.2s}.upload-box:hover{border-color:#9da5b2;background:#f8f9fb}.upload-box label{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-weight:900;font-size:13px}.upload-icon{width:36px;height:36px;border-radius:11px;background:#fff;border:1px solid var(--border);display:grid;place-items:center;font-size:17px}
+    input[type=file]{width:100%;padding:11px;border:1px solid var(--border);border-radius:11px;background:#fff;color:#555;font-size:13px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.field.full{grid-column:1/-1}.field label{display:block;font-size:12px;font-weight:900;margin:0 0 7px}.optional{font-weight:600;color:#9aa1ac}
+    input[type=text],textarea{width:100%;border:1px solid var(--border);border-radius:11px;background:#fff;color:var(--text);padding:12px 13px;outline:none;transition:border .15s,box-shadow .15s}.field input[type=text]:focus,.field textarea:focus{border-color:#9eb0f5;box-shadow:0 0 0 4px #eef2ff}.field textarea{min-height:105px;resize:vertical;line-height:1.5}.hint{margin-top:6px;color:#9298a3;font-size:11px}
+    .actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}.btn{border:0;border-radius:11px;padding:12px 17px;cursor:pointer;font-weight:900;font-size:13px;transition:transform .12s,box-shadow .12s}.btn:hover{transform:translateY(-1px)}.btn.primary{background:var(--dark);color:#fff;box-shadow:0 8px 20px rgba(23,25,31,.16)}.btn.approve{background:var(--green);color:#fff;box-shadow:0 8px 20px rgba(8,116,67,.18);padding:13px 21px}.btn.secondary{background:#f0f1f3;color:#20242b}.btn.ghost{background:transparent;color:#5e6673;padding-left:8px;padding-right:8px}
+    .msg{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-radius:14px;margin:0 0 18px;font-size:13px;line-height:1.5}.msg.success{background:var(--green-bg);color:#09683e;border:1px solid #ccebd9}.msg.error{background:var(--red-bg);color:var(--red);border:1px solid #ffd3cf}.msg.info{background:var(--amber-bg);color:var(--amber);border:1px solid #f5df9e}
+    .review-layout{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(380px,1.1fr);gap:22px;align-items:start}.preview-panel{background:#f1f2f4;border:1px solid var(--border);border-radius:18px;padding:16px}.preview-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:12px;font-weight:900;color:#5f6671}.instagram-card{max-width:430px;margin:0 auto;background:#fff;border:1px solid #dedfe2;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.07)}
+    .ig-head{display:flex;align-items:center;gap:9px;padding:11px 12px;border-bottom:1px solid #eee}.ig-avatar{width:29px;height:29px;border-radius:50%;background:linear-gradient(135deg,#111,#606875);display:grid;place-items:center;color:#fff;font-size:13px}.ig-user{font-size:11px;font-weight:900}.ig-location{font-size:9px;color:#8b9099;margin-top:1px}.ig-more{margin-left:auto;font-weight:900}.ig-media{position:relative;background:#111}.ig-media-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#111;padding:4px}.ig-media-grid.single img{width:100%;height:250px;display:block;object-fit:contain;background:#111}.ig-side{min-width:0;background:#111;border-radius:8px;overflow:hidden}.ig-side-title{padding:6px 7px;background:rgba(0,0,0,.78);color:#fff;font-size:8px;font-weight:900;text-align:center;letter-spacing:.4px}.ig-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;background:#111}.ig-photo-grid img{width:100%;aspect-ratio:4/3;display:block;object-fit:contain;background:#111}.ig-label{position:absolute;top:10px;padding:5px 8px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;font-size:9px;font-weight:900}.ig-actions{display:flex;gap:13px;padding:10px 12px;font-size:18px}.ig-likes{padding:0 12px;font-size:10px;font-weight:900}.ig-caption{padding:7px 12px 13px;font-size:10px;line-height:1.5;color:#30343a;min-height:84px}.ig-caption strong{font-weight:900}.ig-caption .hashtags{display:block;color:#315bea;margin-top:4px}.ig-caption .placeholder{color:#a0a5ad;font-style:italic}
+    .review-editor{position:sticky;top:18px}.editor-card{border:1px solid var(--border);border-radius:16px;padding:18px;background:#fff}.editor-card .field{margin-top:15px}.editor-card .field:first-child{margin-top:0}.counter{float:right;color:#9aa1ac;font-size:11px;font-weight:600}.editor-textarea{min-height:185px}.hashtags-area{min-height:90px!important}.review-identity{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;border:1px solid #dfe5f5;background:#f7f9ff;border-radius:13px;margin-bottom:14px}.review-identity .field{margin-top:0}.review-identity .hint{color:#6b7280}.analysis-card{margin-top:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:16px}.analysis-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.analysis-head strong{font-size:12px}.analysis{white-space:pre-wrap;color:#505864;font-size:13px;line-height:1.6}
+    .meta-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}.meta{background:#f8f9fa;border:1px solid var(--border);border-radius:12px;padding:11px 12px;font-size:11px;color:#7a818c}.meta strong{display:block;color:#242831;font-size:12px;margin-top:3px}
+    .approval-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}.approval-copy{font-size:11px;color:#777f8b;line-height:1.45}.approval-copy strong{color:#3e4651}.lock{font-size:15px}
+    .approved-badge{display:inline-flex;align-items:center;gap:7px;background:var(--green-bg);color:var(--green);border:1px solid #ccebd9;border-radius:999px;padding:8px 11px;font-size:11px;font-weight:900}
+
+    .queue-card{border-color:#dfe5f5;background:#fcfdff}.queue-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.queue-item{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:#fff}.queue-images{display:grid;grid-template-columns:1fr 1fr;gap:3px;background:#111}.queue-side{position:relative;min-width:0}.queue-side span{position:absolute;left:8px;top:8px;z-index:2;background:rgba(0,0,0,.72);color:#fff;border-radius:999px;padding:5px 7px;font-size:8px;font-weight:900}.queue-side img{width:100%;height:180px;display:block;object-fit:contain;background:#111}.queue-body{padding:15px}.queue-top{display:flex;justify-content:space-between;gap:10px;color:#8a909b;font-size:10px;margin-bottom:7px}.queue-top strong{color:#9a6500}.queue-body h4{margin:0 0 3px;font-size:17px}.queue-service{font-size:12px;font-weight:800;color:#315bea;margin-bottom:8px}.queue-body p{font-size:12px;color:#59616d;line-height:1.45;max-height:55px;overflow:hidden;margin:0 0 13px}
+    .history-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:16px}.history-header h3{margin:0 0 5px;font-size:20px}.history-header p{margin:0;color:var(--muted);font-size:13px}.history-count{display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:999px;background:#f2f4f7;border:1px solid var(--border);font-size:11px;font-weight:900;color:#5d6571}
+    .history-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.history-item{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:#fff;box-shadow:var(--shadow-sm)}.history-images{display:grid;grid-template-columns:1fr 1fr;height:190px;background:#111}.history-images img{width:100%;height:100%;object-fit:cover;display:block}.history-image-wrap{position:relative;overflow:hidden}.history-label{position:absolute;top:10px;left:10px;padding:5px 8px;border-radius:999px;background:rgba(0,0,0,.65);color:#fff;font-size:9px;font-weight:900}.history-body{padding:15px}.history-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.history-date{font-size:11px;color:#8a919c;font-weight:700}.history-status{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:var(--green-bg);color:var(--green);border:1px solid #ccebd9;font-size:9px;font-weight:900}.history-title{font-size:13px;font-weight:900;margin:10px 0 4px}.history-service{font-size:11px;color:#747c88;margin-bottom:10px}.history-caption{font-size:11px;color:#4e5662;line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.history-tags{margin-top:6px;color:var(--blue);font-size:10px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.history-empty{padding:28px;text-align:center;border:1px dashed #cfd4dc;border-radius:16px;background:var(--surface-2);color:#7d8590}.history-empty strong{display:block;color:#303640;margin-bottom:5px}.history-note{margin-top:14px;font-size:11px;color:#8a919c}
+
+    .history-tools{display:grid;grid-template-columns:minmax(220px,1fr) 170px auto;gap:10px;align-items:center;margin:16px 0}.history-search,.history-filter{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:11px;padding:11px 12px;background:#fff;color:#252a32;font:inherit;font-size:12px;outline:none}.history-search:focus,.history-filter:focus{border-color:#9aa7ff;box-shadow:0 0 0 3px rgba(76,95,220,.08)}.history-results{font-size:11px;color:#7d8590;font-weight:800;text-align:right}.history-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 16px}.summary-box{padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)}.summary-box small{display:block;color:#8a919c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}.summary-box strong{display:block;margin-top:4px;font-size:18px}.history-item.hidden{display:none}.history-caption.full{display:block;-webkit-line-clamp:unset}.history-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.history-action{border:1px solid var(--border);background:#fff;color:#444b55;border-radius:9px;padding:7px 9px;font-size:10px;font-weight:900;cursor:pointer}.history-action:hover{background:#f6f7f9}.copy-ok{color:var(--green)!important;border-color:#ccebd9!important;background:var(--green-bg)!important}.no-history-results{display:none;padding:24px;text-align:center;border:1px dashed #cfd4dc;border-radius:14px;color:#7d8590;background:var(--surface-2)}.no-history-results.show{display:block}
+    @media(max-width:900px){.review-layout{grid-template-columns:1fr}.review-editor{position:static}.hero{display:block}.hero .tag{margin-top:15px}.meta-row{grid-template-columns:1fr}.ig-media img{height:220px}.history-grid{grid-template-columns:1fr}}
+    @media(max-width:680px){.shell{padding:18px 14px 50px}.topbar{align-items:flex-start}.status-pill{font-size:11px}.hero h2{font-size:28px}.steps{overflow:auto}.step{font-size:11px}.connector{min-width:18px}.upload-grid,.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.card{padding:18px;border-radius:16px}.card-head{display:block}.card-head .tag{margin-top:12px}.approval-footer{display:block}.approval-footer .btn{width:100%;margin-top:12px}.ig-media img{height:180px}}
+  
+    .upload-box label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.upload-box label small{width:100%;color:var(--muted);font-weight:600;font-size:11px;margin-left:38px}.thumb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.thumb-grid:empty{display:none}.thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#eef0f3}.thumb img{width:100%;height:100%;object-fit:cover}.thumb button{position:absolute;right:4px;top:4px;width:24px;height:24px;border:0;border-radius:50%;background:rgba(0,0,0,.72);color:#fff;cursor:pointer;font-weight:900}.photo-count{margin-top:8px;color:var(--muted);font-size:11px;font-weight:800}.upload-total{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f7f8fa;border:1px solid var(--border);color:#626a76;font-size:11px;font-weight:800}.upload-total strong{color:#20242b}.compress-note{margin-top:7px;color:#7d8590;font-size:11px;line-height:1.4}.upload-progress{display:none;margin-top:12px;padding:12px;border-radius:11px;background:#eef2ff;border:1px solid #d9e0ff;color:#3150b8;font-size:12px;font-weight:800}.upload-progress.show{display:block}.ig-media-grid.multi{display:block;max-height:none;overflow:visible}.ig-media-grid.multi .ig-photo-grid img{object-fit:contain}.multi-history{display:grid;grid-template-columns:1fr 1fr;gap:8px}.history-side{border:1px solid var(--border);border-radius:10px;padding:8px}.history-thumb-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.history-thumb-row img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#111;border-radius:7px}.history-side .history-label{position:static;display:inline-block;margin-bottom:6px}
+    @media(max-width:760px){.thumb-grid{grid-template-columns:repeat(3,1fr)}.ig-photo-grid{grid-template-columns:1fr}.multi-history{grid-template-columns:1fr}}
+.history-instagram{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:10px 13px;border:1px solid #cfd7ff;border-radius:11px;background:#f5f7ff;color:#2747c7;text-decoration:none;font-weight:900;font-size:12px}.history-instagram:hover{background:#eef2ff}
+    .v26-dashboard{margin-bottom:18px}
+    .v26-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+    .v26-head h3{margin:0 0 5px;font-size:20px}.v26-head p{margin:0;color:var(--muted);font-size:13px}
+    .v26-badge{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:999px;background:#eaf8f0;color:#087443;border:1px solid #ccebd9;font-size:11px;font-weight:900}
+    .v26-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .v26-metric{padding:15px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2)}
+    .v26-metric small{display:block;color:#858d98;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.45px}
+    .v26-metric strong{display:block;margin-top:5px;font-size:25px;letter-spacing:-.5px}
+    .v26-sub{display:block;margin-top:3px;color:#8a919c;font-size:10px}
+    .v26-lower{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    .v26-info{padding:13px 15px;border:1px solid var(--border);border-radius:14px;background:#fff}
+    .v26-info small{display:block;color:#858d98;font-size:10px;font-weight:900;text-transform:uppercase}.v26-info strong{display:block;margin-top:4px;font-size:13px}
+    .history-status.published{background:#eaf8f0;color:#087443;border-color:#ccebd9}
+    @media(max-width:900px){.v26-metrics{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:600px){.v26-head{display:block}.v26-badge{margin-top:10px}.v26-metrics,.v26-lower{grid-template-columns:1fr}}
+    /* Mobile-first refinements V33.2.18 */
+    @media (max-width: 680px){
+      html,body{width:100%;overflow-x:hidden}
+      .shell{width:100%;padding:14px 10px 42px}
+      .topbar{gap:12px;margin-bottom:18px;flex-direction:column}
+      .brand{width:100%}
+      .brand h1{font-size:18px}.brand p{font-size:12px}
+      .status-pill{align-self:flex-start;font-size:11px;padding:8px 10px}
+      .hero{margin-bottom:18px}.hero h2{font-size:25px;line-height:1.12}.hero p{font-size:13px}
+      .steps{margin-bottom:18px;padding:9px 10px;border-radius:13px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+      .step{font-size:10px}.step .num{width:25px;height:25px}.connector{margin:0 8px;min-width:14px}
+      .card{padding:14px;border-radius:15px;margin-bottom:12px}
+      .card-head{margin-bottom:15px}.card-head h3{font-size:17px}.card-head p{font-size:12px}
+      .upload-grid,.form-grid,.review-layout,.review-identity,.meta-row,.history-summary,.history-tools{grid-template-columns:1fr}
+      .field.full{grid-column:auto}
+      .upload-box{padding:14px}
+      input[type=file]{font-size:12px;padding:9px}
+      input[type=text],textarea{font-size:16px;min-height:46px}
+      .field textarea{min-height:125px}
+      .actions{flex-direction:column;align-items:stretch}
+      .actions .btn,.actions a.btn{width:100%;justify-content:center;min-height:44px}
+      .review-editor{position:static}
+      .approval-footer{display:block}.approval-footer .btn{width:100%;margin-top:10px}
+      .instagram-card{width:100%;max-width:100%}
+      .ig-media-grid{grid-template-columns:1fr}.ig-side{width:100%}
+      .ig-media-grid.single img{height:auto;max-height:55vh}
+      .ig-photo-grid{grid-template-columns:1fr 1fr}
+      .history-grid,.queue-grid,.multi-history{grid-template-columns:1fr}
+      .history-tools{gap:8px}.history-results{text-align:left}
+      .history-actions{flex-direction:column}.history-action{width:100%;min-height:40px}
+      .v26-metrics,.v26-lower{grid-template-columns:1fr}
+    }
+    @media (max-width: 420px){
+      .shell{padding-left:8px;padding-right:8px}
+      .thumb-grid{grid-template-columns:repeat(2,1fr)}
+      .ig-photo-grid{grid-template-columns:1fr}
+      .hero h2{font-size:23px}
+      .card{padding:12px}
+    }
+
+</style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">🚗</div>
+        <div><h1>Sthetcar AI</h1><p>Conteúdo inteligente para sua estética automotiva</p></div>
+      </div>
+      {% if history %}
+        <a class="status-pill" href="{{ url_for('publication_queue') }}" style="text-decoration:none;color:inherit;cursor:pointer;" title="Abrir fila de publicações">
+          <span class="dot"></span> Fila de publicações →
+        </a>
+      {% else %}
+        <div class="status-pill"><span class="dot"></span> Publicação manual</div>
+      {% endif %}
+    </header>
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Central de conteúdo</div>
+        <h2>Transforme um Antes × Depois em um post profissional.</h2>
+        <p>A IA analisa o resultado, prepara a legenda e você faz a revisão final. Nada é publicado sem sua aprovação.</p>
+      </div>
+    </section>
+
+    <section class="card v26-dashboard" id="dashboard">
+      <div class="v26-head">
+        <div>
+          <h3>📊 Dashboard de publicações</h3>
+          <p>Visão rápida do conteúdo aprovado e do que já foi publicado no Instagram.</p>
+        </div>
+        {% if metrics.published > 0 %}
+          <span class="v26-badge">🟢 Instagram ativo</span>
+        {% else %}
+          <span class="tag">Aguardando primeira publicação</span>
+        {% endif %}
+      </div>
+      <div class="v26-metrics">
+        <div class="v26-metric"><small>Posts aprovados</small><strong>{{ metrics.approved }}</strong><span class="v26-sub">conteúdos no histórico</span></div>
+        <div class="v26-metric"><small>Publicados no Instagram</small><strong>{{ metrics.published }}</strong><span class="v26-sub">{{ metrics.pending_publication }} aguardando publicação</span></div>
+        <div class="v26-metric"><small>Fotos arquivadas</small><strong>{{ metrics.photos }}</strong><span class="v26-sub">antes + depois</span></div>
+        <div class="v26-metric"><small>Veículos atendidos</small><strong>{{ metrics.vehicles }}</strong><span class="v26-sub">{{ metrics.services }} tipo{{ '' if metrics.services == 1 else 's' }} de serviço</span></div>
+      </div>
+      <div class="v26-lower">
+        <div class="v26-info"><small>Última publicação</small><strong>{{ metrics.latest_published.replace('T',' ') if metrics.latest_published else 'Nenhuma publicação registrada' }}</strong></div>
+        <div class="v26-info"><small>Próxima ação</small><strong>{% if metrics.pending_publication > 0 %}📲 {{ metrics.pending_publication }} post{{ '' if metrics.pending_publication == 1 else 's' }} aguardando na fila{% else %}✨ Criar e aprovar um novo conteúdo{% endif %}</strong></div>
+      </div>
+      <div class="actions" style="margin-top:14px"><a class="btn secondary" href="{{ url_for('publication_queue') }}" style="text-decoration:none">📋 Abrir fila de publicações{% if metrics.pending_publication > 0 %} ({{ metrics.pending_publication }}){% endif %}</a></div>
+    </section>
+
+    {% set step1 = not result and not approved %}
+    {% set step2 = result and not approved %}
+    {% set step3 = result and not approved %}
+    {% set step4 = approved %}
+    <div class="steps" aria-label="Etapas do fluxo">
+      <div class="step {{ 'active' if step1 else 'done' }}"><span class="num">{{ '1' if step1 else '✓' }}</span> Fotos</div><div class="connector"></div>
+      <div class="step {{ 'active' if step2 else ('done' if result or approved else '') }}"><span class="num">{{ '2' if step2 else ('✓' if result or approved else '2') }}</span> IA</div><div class="connector"></div>
+      <div class="step {{ 'active' if step3 else ('done' if approved else '') }}"><span class="num">{{ '3' if step3 else ('✓' if approved else '3') }}</span> Revisão</div><div class="connector"></div>
+      <div class="step {{ 'active' if step4 else '' }}"><span class="num">{{ '4' if not step4 else '✓' }}</span> Aprovação</div><div class="connector"></div>
+      <div class="step"><span class="num">5</span> Instagram</div>
+    </div>
+
+    {% if approval_queue %}
+      <section class="card queue-card" id="fila">
+        <div class="card-head">
+          <div><h3>🕐 Fila de aprovação</h3><p>Conteúdos já analisados pela IA e salvos para você revisar quando quiser. Fechar o navegador não perde o trabalho.</p></div>
+          <span class="approved-badge">{{ approval_queue|length }} pendente{{ '' if approval_queue|length == 1 else 's' }}</span>
+        </div>
+        <div class="queue-grid">
+          {% for item in approval_queue %}
+            <article class="queue-item">
+              <div class="queue-images">
+                <div class="queue-side"><span>ANTES</span><img src="{{ ((item.before_images or [item.before_image])[0])|media_url }}" alt="Antes"></div>
+                <div class="queue-side"><span>DEPOIS</span><img src="{{ ((item.after_images or [item.after_image])[0])|media_url }}" alt="Depois"></div>
+              </div>
+              <div class="queue-body">
+                <div class="queue-top"><span>{{ item.created_at.replace('T',' ') }}</span><strong>AGUARDANDO APROVAÇÃO</strong></div>
+                <h4>{{ item.vehicle or 'Veículo a confirmar' }}</h4>
+                <div class="queue-service">{{ item.service or 'Serviço a confirmar' }}</div>
+                <p>{{ item.caption }}</p>
+                <a class="btn primary" style="text-decoration:none;display:inline-flex" href="{{ url_for('review_pending', pending_id=item.pending_id) }}">👀 Revisar e aprovar</a>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    {% if error %}<div class="msg error"><span>⚠️</span><div>{{ error }}</div></div>{% endif %}
+
+    {% if approved %}
+      <div class="msg success"><span>✓</span><div><strong>Conteúdo aprovado com sucesso.</strong><br>Aprovado em {{ approved.approved_at.replace('T', ' ') }}. O post foi salvo localmente e <strong>ainda não foi publicado no Instagram</strong>.</div></div>
+      <div class="card">
+        <div class="card-head"><div><h3>Próxima etapa</h3><p>Quando estivermos prontos, vamos conectar o Instagram para transformar este conteúdo aprovado em publicação.</p></div><span class="approved-badge">✓ APROVADO</span></div>
+        <div class="meta-row">
+          <div class="meta">Status<strong>Aguardando Instagram</strong></div>
+          <div class="meta">Legenda<strong>Salva localmente</strong></div>
+          <div class="meta">Segurança<strong>Publicação manual</strong></div>
+        </div>
+      </div>
+    {% endif %}
+
+    <section class="card">
+      <div class="card-head">
+        <div><h3>1. Criar conteúdo</h3><p>Envie até 6 fotos de ANTES e até 6 de DEPOIS. A IA analisará o conjunto completo.</p></div>
+        <span class="tag">✨ IA ASSISTIDA</span>
+      </div>
+      <form method="post" id="uploadForm" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="generate">
+        <div class="upload-grid">
+          <div class="upload-box"><label><span class="upload-icon">📸</span><span>Fotos ANTES</span><small>Até 6 imagens</small></label><input type="file" name="before" accept="image/*" multiple required><div id="beforePreview" class="thumb-grid"></div><div class="photo-count" id="beforeCount">0/6 fotos</div><div class="upload-total" id="beforeSize"><strong>0 MB</strong></div></div>
+          <div class="upload-box"><label><span class="upload-icon">✨</span><span>Fotos DEPOIS</span><small>Até 6 imagens</small></label><input type="file" name="after" accept="image/*" multiple required><div id="afterPreview" class="thumb-grid"></div><div class="photo-count" id="afterCount">0/6 fotos</div><div class="upload-total" id="afterSize"><strong>0 MB</strong></div></div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>🚘 Veículo <span class="optional">(opcional)</span></label><input type="text" name="vehicle" placeholder="Ex.: Honda Civic 2020"></div>
+          <div class="field"><label>🔧 Serviço realizado <span class="optional">(opcional)</span></label><input type="text" name="service" placeholder="Ex.: Polimento técnico"></div>
+          <div class="field full"><label>📝 Observações <span class="optional">(opcional)</span></label><textarea name="notes" placeholder="Ex.: foco na remoção de manchas dos bancos e acabamento final"></textarea><div class="hint">Quanto mais contexto você fornecer, mais específica poderá ser a legenda.</div></div>
+        </div>
+        <div class="upload-total" id="totalSize"><strong>0 MB</strong> selecionados — limite recomendado 30 MB</div><div class="compress-note">🛡️ As fotos são reduzidas no seu navegador antes do envio para evitar erro 413 e acelerar a análise. O original do celular não é enviado.</div><div class="upload-progress" id="uploadProgress">Preparando fotos…</div><div class="actions"><button class="btn primary" id="generateBtn" type="submit">✨ Analisar fotos e gerar post</button><span class="small">A IA não publica nada automaticamente.</span></div>
+      </form>
+    </section>
+
+    {% if result %}
+      <section class="card">
+        <div class="card-head">
+          <div><h3>2. Revisar o conteúdo</h3><p>Confira veículo, serviço, legenda e fotos. Nada é aprovado até você confirmar tudo.</p></div>
+          <span class="tag">👀 REVISÃO HUMANA</span>
+        </div>
+        <div class="review-layout">
+          <div class="preview-panel">
+            <div class="preview-title"><span>PRÉVIA DO POST</span><span>Antes × Depois</span></div>
+            <div class="instagram-card">
+              <div class="ig-head"><div class="ig-avatar">S</div><div><div class="ig-user">sthetcar</div><div class="ig-location">Sthetcar Estética Automotiva</div></div><div class="ig-more">•••</div></div>
+              <div class="ig-media">
+                <div class="ig-media-grid multi">
+                  <div class="ig-side">
+                    <div class="ig-side-title">ANTES</div>
+                    <div class="ig-photo-grid">{% for image in result.before_images %}<img src="{{ image|media_url }}" alt="Foto antes {{ loop.index }}">{% endfor %}</div>
+                  </div>
+                  <div class="ig-side">
+                    <div class="ig-side-title">DEPOIS</div>
+                    <div class="ig-photo-grid">{% for image in result.after_images %}<img src="{{ image|media_url }}" alt="Foto depois {{ loop.index }}">{% endfor %}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="ig-actions">♡ ♧ ⤴︎ <span style="margin-left:auto">♧</span></div>
+              <div class="ig-likes">Resultado pronto para apresentar</div>
+              <div class="ig-caption"><strong>sthetcar</strong> <span id="previewCaption">{{ result.caption }}</span><span id="previewHashtags" class="hashtags">{{ result.hashtags }}</span></div>
+            </div>
+            <div class="meta-row">
+              <div class="meta">Veículo<strong id="previewVehicle">{{ result.vehicle or 'A confirmar' }}</strong></div>
+              <div class="meta">Serviço<strong id="previewService">{{ result.service or 'A confirmar' }}</strong></div>
+              <div class="meta">IA<strong>Concluída ✓</strong></div>
+            </div>
+          </div>
+
+          <div class="review-editor">
+            <div class="editor-card">
+              <form method="post" id="approvalForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="approve">
+                <input type="hidden" name="pending_id" value="{{ result.pending_id }}">
+                <input type="hidden" name="before_image" value="{{ result.before_image }}">
+                <input type="hidden" name="after_image" value="{{ result.after_image }}">
+                {% for image in result.before_images %}<input type="hidden" name="before_images" value="{{ image }}">{% endfor %}
+                {% for image in result.after_images %}<input type="hidden" name="after_images" value="{{ image }}">{% endfor %}
+                <input type="hidden" name="analysis" value="{{ result.analysis }}">
+                <div class="review-identity">
+                  <div class="field"><label>🚘 Veículo <span class="optional">(confira antes de aprovar)</span></label><input type="text" id="reviewVehicle" name="vehicle" value="{{ result.vehicle }}" placeholder="Ex.: Chevrolet S-10 2020" required><div class="hint">A IA pode sugerir; você tem a palavra final.</div></div>
+                  <div class="field"><label>🔧 Serviço realizado <span class="optional">(confira antes de aprovar)</span></label><input type="text" id="reviewService" name="service" value="{{ result.service }}" placeholder="Ex.: Lavagem e higienização" required><div class="hint">Este texto será salvo exatamente no histórico.</div></div>
+                </div>
+                <div class="field"><label>✍️ Legenda <span class="counter" id="captionCount"></span></label><textarea class="editor-textarea" id="caption" name="caption" required>{{ result.caption }}</textarea></div>
+                <div class="field"><label>#️⃣ Hashtags <span class="optional">(opcional)</span></label><textarea class="hashtags-area" id="hashtags" name="hashtags">{{ result.hashtags }}</textarea></div>
+                <div class="actions"><button class="btn approve" type="submit">✓ Aprovar conteúdo</button><button class="btn secondary" type="button" onclick="window.scrollTo({top:0,behavior:'smooth'})">↻ Nova análise</button></div>
+              </form>
+              <div class="approval-footer"><div class="approval-copy"><span class="lock">🔒</span> <strong>Controle total seu.</strong><br>A aprovação apenas salva o conteúdo. O Instagram continuará desconectado nesta versão.</div></div>
+            </div>
+            <div class="analysis-card"><div class="analysis-head"><strong>🤖 O que a IA identificou</strong><span class="tag">ANÁLISE</span></div><div class="analysis">{{ result.analysis }}</div></div>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="card" id="historico">
+      <div class="history-header">
+        <div><h3>📚 Histórico de posts aprovados</h3><p>Consulte, pesquise e reutilize os conteúdos que você já aprovou.</p></div>
+        <span class="history-count">{{ history|length }} {{ 'post aprovado' if history|length == 1 else 'posts aprovados' }}</span>
+      </div>
+      {% if history %}
+        {% set total_images = namespace(value=0) %}
+        {% for item in history %}
+          {% set total_images.value = total_images.value + (item.before_images|length if item.before_images else (1 if item.before_image else 0)) + (item.after_images|length if item.after_images else (1 if item.after_image else 0)) %}
+        {% endfor %}
+        <div class="history-summary">
+          <div class="summary-box"><small>Posts aprovados</small><strong>{{ history|length }}</strong></div>
+          <div class="summary-box"><small>Fotos arquivadas</small><strong>{{ total_images.value }}</strong></div>
+          <div class="summary-box"><small>Último veículo</small><strong>{{ history[0].vehicle or '—' }}</strong></div>
+        </div>
+        <div class="history-tools">
+          <input id="historySearch" class="history-search" type="search" placeholder="🔎 Buscar por veículo, serviço ou legenda...">
+          <select id="historyFilter" class="history-filter"><option value="all">Todos os serviços</option>{% for service in history|map(attribute='service')|select|unique|sort %}<option value="{{ service|lower }}">{{ service }}</option>{% endfor %}</select>
+          <div id="historyResults" class="history-results">{{ history|length }} resultado(s)</div>
+        </div>
+      {% endif %}
+      {% if history %}
+        <div class="history-grid">
+          {% for item in history %}
+            <article class="history-item" data-search="{{ ((item.vehicle or '') ~ ' ' ~ (item.service or '') ~ ' ' ~ (item.caption or '') ~ ' ' ~ (item.hashtags or ''))|lower }}" data-service="{{ (item.service or '')|lower }}">
+              {% if item.before_image or item.after_image %}
+                <div class="history-images multi-history">
+                  <div class="history-side"><span class="history-label">ANTES</span><div class="history-thumb-row">{% for image in item.before_images or [item.before_image] %}{% if image %}<img src="{{ image|media_url }}" alt="Antes {{ loop.index }}">{% endif %}{% endfor %}</div></div>
+                  <div class="history-side"><span class="history-label">DEPOIS</span><div class="history-thumb-row">{% for image in item.after_images or [item.after_image] %}{% if image %}<img src="{{ image|media_url }}" alt="Depois {{ loop.index }}">{% endif %}{% endfor %}</div></div>
+                </div>
+              {% endif %}
+              <div class="history-body">
+                <div class="history-top">
+                  <span class="history-date">{{ item.approved_at.replace('T',' ') }}</span>
+                  {% if item.instagram_publication and item.instagram_publication.status == 'PUBLICADO' %}
+                    <span class="history-status published">✓ PUBLICADO</span>
+                  {% else %}
+                    <span class="history-status">✓ APROVADO</span>
+                  {% endif %}
+                </div>
+                <div class="history-title">{{ item.vehicle or 'Veículo não informado' }}</div>
+                <div class="history-service">{{ item.service or 'Serviço não informado' }}</div>
+                <div class="history-caption">{{ item.caption }}</div>
+                {% if item.hashtags %}<div class="history-tags">{{ item.hashtags }}</div>{% endif %}
+                {% if item.instagram_publication and item.instagram_publication.media_id %}
+                  <div class="history-note">🆔 ID Instagram: {{ item.instagram_publication.media_id }}</div>
+                {% endif %}
+                <div class="history-actions">
+                  <button type="button" class="history-action toggle-details">Ver legenda completa</button>
+                  <button type="button" class="history-action copy-caption" data-caption="{{ item.caption|e }}">Copiar legenda</button>
+                  <a class="history-action" style="text-decoration:none;display:inline-flex;align-items:center" href="{{ url_for('instagram_central', post=loop.index0) }}">📲 Preparar para Instagram</a>
+                </div>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+        <div id="noHistoryResults" class="no-history-results">Nenhum post encontrado com esses filtros.</div>
+        <div class="history-note">🔒 O histórico e o dashboard são salvos localmente neste computador. Publicações reais aparecem como PUBLICADO após confirmação no Instagram.</div>
+      {% else %}
+        <div class="history-empty"><strong>Nenhum post aprovado ainda.</strong>Quando você aprovar seu primeiro conteúdo, ele aparecerá aqui automaticamente.</div>
+      {% endif %}
+    </section>
+  </main>
+
+  <script>
+    const MAX_PHOTOS = 6;
+    const MAX_TOTAL_MB = 30;
+    const MAX_DIMENSION = 1800;
+    const JPEG_QUALITY = 0.82;
+
+    const state = {
+      before: [],
+      after: []
+    };
+
+    function syncReviewIdentity(){
+      const vehicle=document.getElementById('reviewVehicle');
+      const service=document.getElementById('reviewService');
+      const previewVehicle=document.getElementById('previewVehicle');
+      const previewService=document.getElementById('previewService');
+      if(vehicle && previewVehicle) previewVehicle.textContent=vehicle.value.trim() || 'A confirmar';
+      if(service && previewService) previewService.textContent=service.value.trim() || 'A confirmar';
+    }
+
+    function formatMB(bytes){
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function renderFiles(side){
+      const input=document.querySelector('input[name="'+side+'"]');
+      const preview=document.getElementById(side+'Preview');
+      const count=document.getElementById(side+'Count');
+      const size=document.getElementById(side+'Size');
+      const files=state[side];
+      const dt=new DataTransfer();
+      files.forEach(f=>dt.items.add(f));
+      input.files=dt.files;
+      preview.innerHTML='';
+      files.forEach((file,i)=>{
+        const box=document.createElement('div'); box.className='thumb';
+        const img=document.createElement('img'); img.src=URL.createObjectURL(file);
+        const b=document.createElement('button'); b.type='button'; b.textContent='×'; b.title='Remover';
+        b.onclick=()=>{state[side].splice(i,1); renderFiles(side); updateTotal();};
+        box.append(img,b); preview.appendChild(box);
+      });
+      count.textContent=files.length+'/'+MAX_PHOTOS+' fotos';
+      size.innerHTML='<strong>'+formatMB(files.reduce((n,f)=>n+f.size,0))+'</strong>';
+    }
+
+    function setupMultiFiles(side){
+      const input=document.querySelector('input[name="'+side+'"]');
+      if(!input) return;
+      input.addEventListener('change',()=>{
+        const incoming=[...input.files];
+        state[side]=[...state[side],...incoming].slice(0,MAX_PHOTOS);
+        renderFiles(side);
+        updateTotal();
+      });
+    }
+
+    function updateTotal(){
+      const total=[...state.before,...state.after].reduce((n,f)=>n+f.size,0);
+      const el=document.getElementById('totalSize');
+      if(el) el.innerHTML='<strong>'+formatMB(total)+'</strong> selecionados';
+    }
+
+    setupMultiFiles('before');
+    setupMultiFiles('after');
+
+    async function compressImage(file){
+      if(!file.type.startsWith('image/')) return file;
+      const bitmap=await createImageBitmap(file);
+      let w=bitmap.width, h=bitmap.height;
+      const scale=Math.min(1, MAX_DIMENSION/Math.max(w,h));
+      w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
+      const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+      const ctx=canvas.getContext('2d',{alpha:false});
+      ctx.drawImage(bitmap,0,0,w,h); bitmap.close();
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',JPEG_QUALITY));
+      if(!blob) throw new Error('Não foi possível preparar uma das imagens.');
+      const base=file.name.replace(/\.[^.]+$/,'') || 'foto';
+      return new File([blob],base+'.jpg',{type:'image/jpeg',lastModified:Date.now()});
+    }
+
+    async function compressSide(files, label, progress){
+      const out=[];
+      for(let i=0;i<files.length;i++){
+        progress.textContent='Comprimindo '+label+' '+(i+1)+' de '+files.length+'…';
+        out.push(await compressImage(files[i]));
+      }
+      return out;
+    }
+
+    const uploadForm=document.getElementById('uploadForm');
+    if(uploadForm){
+      uploadForm.addEventListener('submit',async (event)=>{
+        event.preventDefault();
+        const progress=document.getElementById('uploadProgress');
+        const button=document.getElementById('generateBtn');
+        if(!state.before.length || !state.after.length){
+          alert('Envie pelo menos 1 foto em ANTES e 1 foto em DEPOIS.'); return;
+        }
+        button.disabled=true; button.style.opacity='.65'; progress.classList.add('show');
+        try{
+          const before=await compressSide(state.before,'ANTES',progress);
+          const after=await compressSide(state.after,'DEPOIS',progress);
+          const total=[...before,...after].reduce((n,f)=>n+f.size,0);
+          progress.textContent='Fotos prontas: '+formatMB(total)+' enviados para a IA.';
+          if(total>MAX_TOTAL_MB*1024*1024){
+            throw new Error('Mesmo após a compressão, as fotos ficaram em '+formatMB(total)+'. Remova algumas fotos e tente novamente.');
+          }
+          const fd=new FormData(uploadForm);
+          fd.delete('before'); fd.delete('after');
+          before.forEach(f=>fd.append('before',f,f.name));
+          after.forEach(f=>fd.append('after',f,f.name));
+          const response=await fetch(window.location.pathname || '/', {method:'POST',body:fd});
+          const html=await response.text();
+          if(!response.ok){ document.open(); document.write(html); document.close(); return; }
+          document.open(); document.write(html); document.close();
+        }catch(err){
+          progress.textContent='⚠️ '+(err.message || 'Não foi possível enviar as fotos.');
+          button.disabled=false; button.style.opacity='1';
+        }
+      });
+    }
+
+    const caption = document.getElementById('caption');
+    const hashtags = document.getElementById('hashtags');
+    const previewCaption = document.getElementById('previewCaption');
+    const previewHashtags = document.getElementById('previewHashtags');
+    const captionCount = document.getElementById('captionCount');
+    function syncPreview(){
+      if(caption && previewCaption){ previewCaption.textContent = caption.value || 'Digite uma legenda para visualizar aqui.'; previewCaption.classList.toggle('placeholder', !caption.value); }
+      if(hashtags && previewHashtags){ previewHashtags.textContent = hashtags.value; previewHashtags.style.display = hashtags.value ? 'block' : 'none'; }
+      if(captionCount){ captionCount.textContent = caption.value.length + ' caracteres'; }
+    }
+    if(caption){caption.addEventListener('input',syncPreview);hashtags.addEventListener('input',syncPreview);syncPreview();}
+
+    const historySearch=document.getElementById('historySearch');
+    const historyFilter=document.getElementById('historyFilter');
+    const historyResults=document.getElementById('historyResults');
+    const noHistoryResults=document.getElementById('noHistoryResults');
+    function filterHistory(){
+      const q=(historySearch?.value||'').trim().toLowerCase();
+      const service=(historyFilter?.value||'all').toLowerCase();
+      const cards=[...document.querySelectorAll('.history-item')];
+      let visible=0;
+      cards.forEach(card=>{
+        const matchesText=!q || (card.dataset.search||'').includes(q);
+        const matchesService=service==='all' || (card.dataset.service||'')===service;
+        const show=matchesText && matchesService;
+        card.classList.toggle('hidden',!show);
+        if(show) visible++;
+      });
+      if(historyResults) historyResults.textContent=visible+' resultado(s)';
+      if(noHistoryResults) noHistoryResults.classList.toggle('show',visible===0);
+    }
+    if(historySearch) historySearch.addEventListener('input',filterHistory);
+    if(historyFilter) historyFilter.addEventListener('change',filterHistory);
+
+    document.querySelectorAll('.toggle-details').forEach(button=>{
+      button.addEventListener('click',()=>{
+        const caption=button.closest('.history-body')?.querySelector('.history-caption');
+        if(!caption) return;
+        const expanded=caption.classList.toggle('full');
+        button.textContent=expanded?'Ocultar legenda':'Ver legenda completa';
+      });
+    });
+
+    document.querySelectorAll('.copy-caption').forEach(button=>{
+      button.addEventListener('click',async()=>{
+        const caption=button.dataset.caption||'';
+        try{
+          await navigator.clipboard.writeText(caption);
+          const old=button.textContent; button.textContent='✓ Copiada'; button.classList.add('copy-ok');
+          setTimeout(()=>{button.textContent=old;button.classList.remove('copy-ok')},1600);
+        }catch(e){
+          alert('Não foi possível copiar automaticamente. Selecione a legenda e copie manualmente.');
+        }
+      });
+    });
+
+    const reviewVehicle=document.getElementById('reviewVehicle');
+    const reviewService=document.getElementById('reviewService');
+    if(reviewVehicle) reviewVehicle.addEventListener('input',syncReviewIdentity);
+    if(reviewService) reviewService.addEventListener('input',syncReviewIdentity);
+    syncReviewIdentity();
+  </script>
+</body>
+</html>
