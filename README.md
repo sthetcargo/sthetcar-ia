@@ -1,3 +1,7 @@
+## V33.2.19 — suporte a vídeo
+
+A versão atual aceita fotos e vídeos MP4/MOV em ANTES e DEPOIS, analisa as mídias com IA e prepara publicação no Instagram como mídia única ou carrossel.
+
 # Sthetcar IA V33 Online
 
 Esta versÃ£o prepara o aplicativo para usar o Supabase como camada central de fotos e estado, mantendo o fluxo atual de IA, revisÃ£o, aprovaÃ§Ã£o, fila e publicaÃ§Ã£o.

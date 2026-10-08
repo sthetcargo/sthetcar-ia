@@ -168,7 +168,9 @@ app.config.update(
 app.config["MAX_CONTENT_LENGTH"] = 35 * 1024 * 1024
 MAX_PHOTOS_PER_SIDE = 6
 MAX_TOTAL_UPLOAD_BYTES = 30 * 1024 * 1024
-ALLOWED = {"jpg", "jpeg", "png", "webp"}
+ALLOWED = {"jpg", "jpeg", "png", "webp", "mp4", "mov"}
+VIDEO_EXTENSIONS = {"mp4", "mov"}
+MAX_VIDEO_BYTES = 20 * 1024 * 1024
 
 
 STATE_FILES = {
@@ -378,6 +380,12 @@ def media_url(value):
 
 app.add_template_filter(media_url, "media_url")
 
+def is_video_media(value):
+    raw = str(value or "").split("?", 1)[0].lower()
+    return any(raw.endswith("." + ext) for ext in VIDEO_EXTENSIONS)
+
+app.add_template_filter(is_video_media, "is_video_media")
+
 
 def repair_media_collection(items):
     changed = False
@@ -547,7 +555,7 @@ def local_path_from_upload_url(value):
     return ""
 
 
-def instagram_media_urls(post):
+def instagram_media_items(post):
     # Preserve the approved order: BEFORE 1, AFTER 1, BEFORE 2, AFTER 2...
     after = [x for x in (post.get("after_images") or [post.get("after_image")]) if x]
     before = [x for x in (post.get("before_images") or [post.get("before_image")]) if x]
@@ -562,49 +570,75 @@ def instagram_media_urls(post):
     for value, side in chosen[:10]:
         ref = ensure_remote_image_ref(value, side)
         if is_remote_ref(ref):
-            url = signed_url(remote_path_from_ref(ref), 900)
+            url = signed_url(remote_path_from_ref(ref), 3600)
             if url:
-                result.append(url)
+                result.append({"url": url, "media_type": media_kind(ref), "ref": ref})
                 continue
         if str(value).startswith("http"):
-            result.append(str(value))
+            result.append({"url": str(value), "media_type": media_kind(value), "ref": str(value)})
 
     if not result:
-        raise RuntimeError("Nenhuma foto vÃ¡lida foi encontrada para publicaÃ§Ã£o.")
+        raise RuntimeError("Nenhuma mídia válida foi encontrada para publicação.")
     return result
 
 
-def instagram_create_container(connection, image_urls, caption):
+def instagram_media_urls(post):
+    return [item["url"] for item in instagram_media_items(post)]
+
+
+def _wait_for_container(connection, container_id, timeout=90):
+    started = datetime.now().timestamp()
+    last = {}
+    while datetime.now().timestamp() - started < timeout:
+        last = instagram_container_status(connection, container_id)
+        status = (last.get("status_code") or "").upper()
+        if status in {"FINISHED", "PUBLISHED"}:
+            return last
+        if status in {"ERROR", "EXPIRED"}:
+            raise RuntimeError(f"Instagram não conseguiu processar a mídia: {status} {last.get('status', '')}".strip())
+        import time
+        time.sleep(4)
+    return last
+
+
+def instagram_create_container(connection, media_items, caption):
     cfg = instagram_config()
     base = f"https://graph.instagram.com/{cfg['api_version']}"
     user_id = connection.get("user_id", "")
     token = connection.get("access_token", "")
     if not user_id or not token:
-        raise RuntimeError("ConexÃ£o do Instagram incompleta.")
+        raise RuntimeError("Conexão do Instagram incompleta.")
 
-    if len(image_urls) == 1:
+    if len(media_items) == 1:
+        item = media_items[0]
         data = {
-            "image_url": image_urls[0],
             "caption": caption,
             "access_token": token,
         }
+        if item["media_type"] == "VIDEO":
+            data.update({"media_type": "VIDEO", "video_url": item["url"]})
+        else:
+            data.update({"image_url": item["url"]})
         return _http_json_request(f"{base}/{user_id}/media", data=data, method="POST", timeout=90)
 
     children = []
-    for image_url in image_urls:
+    for item in media_items:
+        data = {
+            "is_carousel_item": "true",
+            "access_token": token,
+        }
+        if item["media_type"] == "VIDEO":
+            data.update({"media_type": "VIDEO", "video_url": item["url"]})
+        else:
+            data.update({"image_url": item["url"]})
         child = _http_json_request(
-            f"{base}/{user_id}/media",
-            data={
-                "image_url": image_url,
-                "is_carousel_item": "true",
-                "access_token": token,
-            },
-            method="POST",
-            timeout=90,
+            f"{base}/{user_id}/media", data=data, method="POST", timeout=90
         )
         child_id = child.get("id")
         if not child_id:
-            raise RuntimeError(f"Instagram nÃ£o retornou o ID do item do carrossel: {child}")
+            raise RuntimeError(f"Instagram não retornou o ID do item do carrossel: {child}")
+        if item["media_type"] == "VIDEO":
+            _wait_for_container(connection, child_id, timeout=90)
         children.append(child_id)
 
     carousel = _http_json_request(
@@ -620,7 +654,6 @@ def instagram_create_container(connection, image_urls, caption):
     )
     carousel["children"] = children
     return carousel
-
 
 def instagram_container_status(connection, container_id):
     cfg = instagram_config()
@@ -655,6 +688,15 @@ def instagram_publish_container(connection, container_id):
 
 def allowed(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED
+
+
+def is_video_file(path_or_name):
+    name = str(path_or_name or "").split("?", 1)[0].lower()
+    return any(name.endswith("." + ext) for ext in VIDEO_EXTENSIONS)
+
+
+def media_kind(value):
+    return "VIDEO" if is_video_file(value) else "IMAGE"
 
 
 def _image_search_roots():
@@ -1028,11 +1070,13 @@ def dashboard():
             notes = request.form.get("notes", "").strip()
 
             if not before_files or not after_files:
-                error = "Envie pelo menos 1 foto em ANTES e 1 foto em DEPOIS."
+                error = "Envie pelo menos 1 mídia em ANTES e 1 mídia em DEPOIS."
             elif len(before_files) > MAX_PHOTOS_PER_SIDE or len(after_files) > MAX_PHOTOS_PER_SIDE:
-                error = f"VocÃª pode enviar atÃ© {MAX_PHOTOS_PER_SIDE} fotos em cada lado."
+                error = f"Você pode enviar até {MAX_PHOTOS_PER_SIDE} arquivos em cada lado."
             elif any(not allowed(f.filename) for f in before_files + after_files):
-                error = "Use JPG, JPEG, PNG ou WEBP."
+                error = "Use JPG, JPEG, PNG, WEBP, MP4 ou MOV."
+            elif any(is_video_file(f.filename) and (getattr(f, "content_length", None) or 0) > MAX_VIDEO_BYTES for f in before_files + after_files):
+                error = "Cada vídeo deve ter no máximo 20 MB."
             elif request.content_length and request.content_length > app.config["MAX_CONTENT_LENGTH"]:
                 error = "O envio ultrapassou o limite de 30 MB. As fotos sÃ£o comprimidas automaticamente antes do envio; se isso acontecer, reduza a quantidade de fotos."
             else:
@@ -1050,6 +1094,14 @@ def dashboard():
                         path = AFTER_DIR / name
                         file.save(path)
                         after_paths.append(path)
+
+                    saved_paths = before_paths + after_paths
+                    total_saved = sum(path.stat().st_size for path in saved_paths if path.exists())
+                    oversized_video = next((path for path in saved_paths if is_video_file(path.name) and path.stat().st_size > MAX_VIDEO_BYTES), None)
+                    if oversized_video:
+                        raise RuntimeError(f"O vídeo {oversized_video.name} ultrapassa o limite de 20 MB.")
+                    if total_saved > MAX_TOTAL_UPLOAD_BYTES:
+                        raise RuntimeError(f"As mídias ficaram em {total_saved / (1024 * 1024):.1f} MB. O limite total é de 30 MB.")
 
                     analysis = analyze_before_after(
                         before_paths, after_paths, vehicle, service, notes
@@ -1085,6 +1137,12 @@ def dashboard():
                     save_approval_queue(approval_queue)
                     result["pending_id"] = pending["pending_id"]
                 except Exception as exc:
+                    for path in before_paths + after_paths:
+                        try:
+                            if path.exists():
+                                path.unlink()
+                        except Exception:
+                            pass
                     error = str(exc)
 
     return render_template(
@@ -1306,17 +1364,18 @@ def instagram_test_media():
         if not draft_matches_post(draft, post, post_index, connection):
             draft = build_publication_draft(post, post_index, connection)
 
-        image_urls = instagram_media_urls(post)
-        container = instagram_create_container(connection, image_urls, draft["full_caption"])
+        media_items = instagram_media_items(post)
+        container = instagram_create_container(connection, media_items, draft["full_caption"])
         container_id = container.get("id")
         if not container_id:
             raise RuntimeError(f"Instagram nÃ£o retornou o ID do container: {container}")
-        status = instagram_container_status(connection, container_id)
+        status = _wait_for_container(connection, container_id, timeout=90) if any(item["media_type"] == "VIDEO" for item in media_items) else instagram_container_status(connection, container_id)
         draft.update({
             "media_tested_at": datetime.now().isoformat(timespec="seconds"),
             "container_id": container_id,
             "container_status": status,
-            "public_media_urls": image_urls,
+            "public_media_urls": [item["url"] for item in media_items],
+            "media_types": [item["media_type"] for item in media_items],
             "status": "MÃDIA PREPARADA NO INSTAGRAM â€” ainda nÃ£o publicada",
             "note": "Container criado no Instagram. A publicaÃ§Ã£o final ainda exige confirmaÃ§Ã£o explÃ­cita.",
         })
@@ -1358,8 +1417,14 @@ def instagram_publish():
     try:
         status = instagram_container_status(connection, container_id)
         status_code = (status.get("status_code") or "").upper()
+        if status_code not in {"FINISHED", "PUBLISHED"}:
+            try:
+                status = _wait_for_container(connection, container_id, timeout=90)
+                status_code = (status.get("status_code") or "").upper()
+            except Exception as wait_exc:
+                return redirect(url_for("instagram_central", post=post_index, oauth_error=f"O Instagram ainda está processando a mídia: {wait_exc}"))
         if status_code and status_code not in {"FINISHED", "PUBLISHED"}:
-            return redirect(url_for("instagram_central", post=post_index, oauth_error=f"O Instagram ainda nÃ£o liberou o container para publicaÃ§Ã£o: {status_code}."))
+            return redirect(url_for("instagram_central", post=post_index, oauth_error=f"O Instagram ainda não liberou o container para publicação: {status_code}."))
         if status_code == "PUBLISHED" and draft.get("published_media_id"):
             return redirect(url_for("instagram_central", post=post_index, published="1"))
 

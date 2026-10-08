@@ -25,6 +25,21 @@ def _client():
         )
     return genai.Client(api_key=api_key)
 
+def _media_part(path: Path):
+    ext = path.suffix.lower()
+    image_mimes = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".webp": "image/webp",
+    }
+    video_mimes = {
+        ".mp4": "video/mp4", ".mov": "video/quicktime",
+    }
+    mime = image_mimes.get(ext) or video_mimes.get(ext)
+    if not mime:
+        raise RuntimeError(f"Tipo de mídia não suportado pela IA: {path.name}")
+    return types.Part.from_bytes(data=path.read_bytes(), mime_type=mime)
+
+
 def _image_part(path: Path):
     mime = {
         ".jpg": "image/jpeg",
@@ -33,6 +48,7 @@ def _image_part(path: Path):
         ".webp": "image/webp",
     }.get(path.suffix.lower(), "image/jpeg")
     return types.Part.from_bytes(data=path.read_bytes(), mime_type=mime)
+
 
 def _models_to_try():
     configured = os.getenv("GEMINI_MODEL", "").strip()
@@ -130,10 +146,12 @@ def analyze_before_after(before_paths, after_paths,
     contents = [prompt]
     contents.append(f"=== FOTOS ANTES ({len(before_paths)}) ===")
     for i, path in enumerate(before_paths, 1):
-        contents.extend([f"FOTO ANTES {i}", _image_part(path)])
+        label = "VÍDEO" if path.suffix.lower() in {".mp4", ".mov"} else "FOTO"
+        contents.extend([f"{label} ANTES {i}", _media_part(path)])
     contents.append(f"=== FOTOS DEPOIS ({len(after_paths)}) ===")
     for i, path in enumerate(after_paths, 1):
-        contents.extend([f"FOTO DEPOIS {i}", _image_part(path)])
+        label = "VÍDEO" if path.suffix.lower() in {".mp4", ".mov"} else "FOTO"
+        contents.extend([f"{label} DEPOIS {i}", _media_part(path)])
 
     response, _ = _generate(
         client, contents, temperature=0.4, max_output_tokens=1400
