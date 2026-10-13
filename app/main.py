@@ -1625,6 +1625,9 @@ def uploaded_file(folder, filename):
     return send_from_directory(directory, filename)
 
 
+@app.route("/privacy")
+def privacy_policy():
+    return render_template("privacy.html")
 if __name__ == "__main__":
     debug = os.getenv("FLASK_DEBUG", "0").strip().lower() in {"1", "true", "yes", "on"}
     host = os.getenv("FLASK_HOST", "127.0.0.1").strip() or "127.0.0.1"
