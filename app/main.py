@@ -290,12 +290,13 @@ def facebook_config():
         "redirect_uri": redirect_uri,
         "api_version": os.getenv("META_GRAPH_VERSION", "v26.0").strip(),
         "page_id": os.getenv("FACEBOOK_PAGE_ID", "").strip(),
+        "login_config_id": os.getenv("FACEBOOK_LOGIN_CONFIG_ID", "").strip(),
     }
 
 
 def facebook_meta_ready():
     cfg = facebook_config()
-    return bool(cfg["app_id"] and cfg["app_secret"] and cfg["redirect_uri"])
+    return bool(cfg["app_id"] and cfg["app_secret"] and cfg["redirect_uri"] and cfg["login_config_id"])
 
 
 def load_facebook_connection():
@@ -1632,14 +1633,17 @@ def instagram_disconnect():
 def facebook_login():
     cfg = facebook_config()
     if not facebook_meta_ready():
-        return redirect(url_for("instagram_central", facebook_error="Configure META_APP_ID, META_APP_SECRET e FACEBOOK_REDIRECT_URI no ambiente do servidor."))
+        return redirect(url_for("instagram_central", facebook_error="Configure META_APP_ID, META_APP_SECRET, FACEBOOK_LOGIN_CONFIG_ID e FACEBOOK_REDIRECT_URI no ambiente do servidor."))
     state = secrets.token_urlsafe(24)
     session["facebook_oauth_state"] = state
     params = {
         "client_id": cfg["app_id"],
         "redirect_uri": cfg["redirect_uri"],
         "response_type": "code",
-        "scope": "pages_show_list,pages_read_engagement,pages_manage_posts",
+        # Login do Facebook para Empresas uses a saved Meta configuration;
+        # the config_id supplies the permission set instead of the scope query.
+        "config_id": cfg["login_config_id"],
+        "override_default_response_type": "true",
         "state": state,
     }
     oauth_url = f"https://www.facebook.com/{cfg['api_version']}/dialog/oauth?{urllib.parse.urlencode(params)}"
