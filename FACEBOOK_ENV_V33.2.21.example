@@ -2,4 +2,6 @@
 # Existing integration continues to use META_APP_ID, META_APP_SECRET, META_GRAPH_VERSION.
 FACEBOOK_REDIRECT_URI=https://sthetcar-ia.onrender.com/auth/facebook/callback
 FACEBOOK_PAGE_ID=110352814889450
+# Set this to the configuration ID from Meta Developers > Login do Facebook para Empresas.
+FACEBOOK_LOGIN_CONFIG_ID=COLE_AQUI_O_ID_DA_CONFIGURACAO
 PUBLIC_BASE_URL=https://sthetcar-ia.onrender.com
