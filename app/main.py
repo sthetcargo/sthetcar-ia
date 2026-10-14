@@ -802,6 +802,8 @@ def preflight_instagram_for_post(post_index):
     status_code = (status.get("status_code") or "").upper()
     if status_code not in {"FINISHED", "PUBLISHED"}:
         raise RuntimeError(f"O Instagram ainda está processando a mídia: {status_code or 'status desconhecido'}.")
+    if status_code == "PUBLISHED" and not draft.get("published_media_id"):
+        raise RuntimeError("O Instagram já marca a mídia como publicada, mas não há ID local registrado. Para evitar duplicação, não publicaremos outra plataforma por este fluxo até revisar o registro.")
     return True
 
 
