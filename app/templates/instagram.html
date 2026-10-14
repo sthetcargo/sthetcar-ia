@@ -45,7 +45,7 @@ body{font-family:Arial,sans-serif;background:#f5f6f8;color:#20242b;margin:0}.wra
     <p class="mini">Conecte a Página uma vez. O token será guardado no estado privado do servidor; ele nunca aparece nesta tela.</p>
     <a class="btn blue" href="{{ url_for('facebook_login') }}">🔗 Conectar Página do Facebook</a>
   {% else %}
-    <p class="notice">⚙️ Para ativar o Facebook, configure <code>META_APP_ID</code>, <code>META_APP_SECRET</code> e a URI de retorno OAuth no ambiente do servidor.</p>
+    <p class="notice">⚙️ Para ativar o Facebook, configure <code>META_APP_ID</code>, <code>META_APP_SECRET</code>, <code>FACEBOOK_LOGIN_CONFIG_ID</code> e <code>FACEBOOK_REDIRECT_URI</code> no ambiente do servidor.</p>
   {% endif %}
 </div>
 {% if facebook_connected %}<div class="notice success">✅ Página do Facebook conectada com sucesso.</div>{% endif %}
