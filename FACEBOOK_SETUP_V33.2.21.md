@@ -8,17 +8,23 @@ In the Render service `sthetcar-ia`, preserve existing environment values and ad
 
 - `FACEBOOK_REDIRECT_URI=https://sthetcar-ia.onrender.com/auth/facebook/callback`
 - `FACEBOOK_PAGE_ID=110352814889450`
+- `FACEBOOK_LOGIN_CONFIG_ID=<ID da configuração Login do Facebook para Empresas>`
 - `PUBLIC_BASE_URL=https://sthetcar-ia.onrender.com`
 
 The code reuses `META_APP_ID`, `META_APP_SECRET`, and `META_GRAPH_VERSION` from the existing Meta app. Do not paste access tokens into Render or into this repository.
 
 ## Meta app
 
-In Meta Developers for app “Sthetcar IA”, add the exact redirect URI below under the valid OAuth redirect URIs for the Facebook Login product used by the app:
+In Meta Developers for app “Sthetcar IA”:
 
-`https://sthetcar-ia.onrender.com/auth/facebook/callback`
+1. Under **Login do Facebook para Empresas → Configurações**, keep the valid OAuth redirect URI saved as exactly:
 
-Keep the existing Instagram redirect URI. Do not remove Instagram scopes or change its callback.
+   `https://sthetcar-ia.onrender.com/auth/facebook/callback`
+
+2. Open **Login do Facebook para Empresas → Configurações** (the configuration wizard/manage configurations area) and create a Login for Business configuration. Select only the intended Sthetcar Page as an asset and include the required Page permissions: `pages_show_list`, `pages_read_engagement`, and `pages_manage_posts`.
+3. Copy the configuration ID shown by Meta and set it in Render as `FACEBOOK_LOGIN_CONFIG_ID`.
+
+The app's OAuth request uses the Business Login `config_id`; it does not pass a `scope` query parameter. Keep the existing Instagram OAuth redirect URI and settings unchanged. Do not merge or deploy until the configuration ID is available and reviewed.
 
 ## Safe validation sequence after review and deployment
 
