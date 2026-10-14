@@ -59,6 +59,14 @@ for field in ('"caption"', '"hashtags"', '"vehicle"', '"service"', '"approved_at
     assert field in draft_matcher, f"Draft matcher is missing {field}"
 assert "fallback_hashtags(" in draft_matcher, "Draft matcher must mirror the existing fallback hashtag behavior"
 
+# Facebook Login for Business must use the saved configuration ID, not a scope list.
+login_start = source.index('def facebook_login():')
+login_end = source.index('\n\n@app.route("/auth/facebook/callback")', login_start)
+facebook_login_source = source[login_start:login_end]
+assert '"config_id": cfg["login_config_id"]' in facebook_login_source, "Facebook OAuth must pass the Login for Business config_id"
+assert '"scope":' not in facebook_login_source, "Login for Business config must supply permissions instead of a scope query"
+assert 'FACEBOOK_LOGIN_CONFIG_ID' in source, "Facebook configuration ID must be read from environment"
+
 # Parse the complete Jinja template without executing actions or making API calls.
 template = template_path.read_text(encoding="utf-8")
 Environment().parse(template)
