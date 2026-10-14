@@ -57,6 +57,7 @@ end = source.index("\ndef meta_ready(", start)
 draft_matcher = source[start:end]
 for field in ('"caption"', '"hashtags"', '"vehicle"', '"service"', '"approved_at"'):
     assert field in draft_matcher, f"Draft matcher is missing {field}"
+assert "fallback_hashtags(" in draft_matcher, "Draft matcher must mirror the existing fallback hashtag behavior"
 
 # Parse the complete Jinja template without executing actions or making API calls.
 template = template_path.read_text(encoding="utf-8")
