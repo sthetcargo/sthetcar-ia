@@ -1677,15 +1677,12 @@ def facebook_callback():
         user_token = short_result.get("access_token", "")
         if not user_token:
             raise RuntimeError("A Meta não retornou token de usuário para o Facebook.")
-        exchange_params = urllib.parse.urlencode({
-            "grant_type": "fb_exchange_token",
-            "client_id": cfg["app_id"],
-            "client_secret": cfg["app_secret"],
-            "fb_exchange_token": user_token,
-        })
-        exchange_url = f"https://graph.facebook.com/{cfg['api_version']}/oauth/access_token?{exchange_params}"
-        long_result = _http_json_request(exchange_url, timeout=30, api_label="Facebook OAuth")
-        user_token = long_result.get("access_token") or user_token
+        # This Login for Business configuration is explicitly set to issue a
+        # system-user access token. Do not exchange it as if it were a standard
+        # short-lived user token; Meta may reject fb_exchange_token for this flow.
+        # Use the token returned by the authorization-code exchange to enumerate
+        # the Page grant, then store the Page access token returned by /me/accounts.
+        long_result = {"expires_in": short_result.get("expires_in")}
         pages_result = facebook_graph_request(
             "me/accounts", user_token,
             params={"fields": "id,name,access_token,tasks", "limit": 100},
