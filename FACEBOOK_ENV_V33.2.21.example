@@ -1,0 +1,5 @@
+# Add these only to the Render service environment; preserve existing Meta credentials.
+# Existing integration continues to use META_APP_ID, META_APP_SECRET, META_GRAPH_VERSION.
+FACEBOOK_REDIRECT_URI=https://sthetcar-ia.onrender.com/auth/facebook/callback
+FACEBOOK_PAGE_ID=110352814889450
+PUBLIC_BASE_URL=https://sthetcar-ia.onrender.com
