@@ -517,14 +517,19 @@ def build_publication_draft(post, post_index, connection):
 
 
 def draft_matches_post(draft, post, post_index, connection):
-    """Only reuse a draft when identity AND approved content still match."""
+    """Only reuse a draft when identity AND the effective approved content match."""
+    if not draft or not post:
+        return False
+    expected_caption = (post.get("caption") or "").strip()
+    expected_hashtags = (post.get("hashtags") or "").strip()
+    if not expected_hashtags:
+        expected_hashtags = fallback_hashtags(post.get("vehicle", ""), post.get("service", ""))
     return (
-        bool(draft)
-        and str(draft.get("post_index", "")) == str(post_index)
+        str(draft.get("post_index", "")) == str(post_index)
         and draft.get("approved_at", "") == post.get("approved_at", "")
         and draft.get("instagram", {}).get("user_id", "") == connection.get("user_id", "")
-        and draft.get("caption", "") == post.get("caption", "")
-        and draft.get("hashtags", "") == post.get("hashtags", "")
+        and (draft.get("caption") or "").strip() == expected_caption
+        and (draft.get("hashtags") or "").strip() == expected_hashtags
         and draft.get("vehicle", "") == post.get("vehicle", "")
         and draft.get("service", "") == post.get("service", "")
     )
