@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime
 import json
+import hashlib
 import os
 import re
 import secrets
@@ -1849,26 +1850,129 @@ def instagram_test_media():
         return redirect(url_for("instagram_central", post=post_index, oauth_error=f"Falha ao preparar mÃ­dia no Instagram: {exc}"))
 
 
+PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS = 10 * 60
+
+
+def publication_confirmation_fingerprint(post):
+    """Fingerprint approved content so confirmation cannot drift to another post."""
+    fields = (
+        "approved_at", "vehicle", "service", "caption", "hashtags",
+        "before_image", "after_image", "before_images", "after_images",
+    )
+    payload = {field: post.get(field) for field in fields}
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _preflight_selected_platforms(post_index, selected):
+    """Validate every selected target without creating any public post."""
+    selected = set(selected)
+    history = reconcile_publication_records(enrich_history(load_history()))
+    if not (0 <= post_index < len(history)):
+        raise RuntimeError("Post aprovado não encontrado.")
+    post = history[post_index]
+    if not publication_key(post):
+        raise RuntimeError("O post aprovado não tem uma identificação estável para confirmação.")
+    if "instagram" in selected:
+        preflight_instagram_for_post(post_index)
+    if "facebook" in selected:
+        fb_connection = load_facebook_connection()
+        fb_audit = load_facebook_publication_audit()
+        if not fb_connection.get("access_token") or not fb_connection.get("page_id"):
+            raise RuntimeError("Conecte a Página do Facebook antes de publicar.")
+        if find_facebook_publication_record(post, fb_audit, fb_connection.get("page_id", "")):
+            raise RuntimeError("Este post já foi publicado no Facebook. A duplicação foi bloqueada.")
+        facebook_media_urls(post)
+    return post
+
+
+def _prepare_publication_confirmation(post_index, selected):
+    """First step: preflight and display a separate confirmation page; never publish here."""
+    session.pop("pending_platform_publication", None)
+    selected = sorted({value for value in selected if value in {"instagram", "facebook"}})
+    if not selected:
+        return redirect(url_for(
+            "instagram_central",
+            post=post_index,
+            oauth_error="Selecione pelo menos uma plataforma para publicar.",
+        ))
+
+    post = {}
+    try:
+        post = _preflight_selected_platforms(post_index, selected)
+        session["pending_platform_publication"] = {
+            "id": secrets.token_urlsafe(32),
+            "created_at": time.time(),
+            "post_index": post_index,
+            "approved_at": publication_key(post),
+            "fingerprint": publication_confirmation_fingerprint(post),
+            "platforms": selected,
+        }
+        return redirect(url_for("confirm_platform_publication"))
+    except Exception as exc:
+        message = _safe_error_message(exc)[:350]
+        for platform in selected:
+            try:
+                log_platform_attempt(
+                    platform,
+                    post or {"approved_at": "", "vehicle": "", "service": ""},
+                    "BLOQUEADO",
+                    message,
+                )
+            except Exception:
+                pass
+        session["last_platform_results"] = [
+            {"platform": platform, "status": "BLOQUEADO", "message": message}
+            for platform in selected
+        ]
+        return redirect(url_for("instagram_central", post=post_index, platforms_result="1"))
+
+
+def _load_pending_publication_confirmation():
+    """Load a recent, one-post confirmation intent and reject stale or altered content."""
+    pending = session.get("pending_platform_publication")
+    if not isinstance(pending, dict):
+        return None, None, "Não existe uma confirmação de publicação pendente. Selecione as plataformas novamente."
+
+    try:
+        created_at = float(pending.get("created_at", 0))
+        post_index = int(pending.get("post_index", -1))
+        selected = pending.get("platforms", [])
+    except (TypeError, ValueError):
+        session.pop("pending_platform_publication", None)
+        return None, None, "A confirmação ficou inválida. Inicie novamente."
+
+    if created_at <= 0 or time.time() - created_at > PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS:
+        session.pop("pending_platform_publication", None)
+        return None, None, "A confirmação expirou após 10 minutos. Inicie novamente."
+    if not isinstance(selected, list) or not selected or any(
+        platform not in {"instagram", "facebook"} for platform in selected
+    ) or len(set(selected)) != len(selected):
+        session.pop("pending_platform_publication", None)
+        return None, None, "A seleção de plataformas da confirmação é inválida. Inicie novamente."
+
+    history = reconcile_publication_records(enrich_history(load_history()))
+    if not (0 <= post_index < len(history)):
+        session.pop("pending_platform_publication", None)
+        return None, None, "O post aprovado não foi encontrado. Inicie novamente."
+    post = history[post_index]
+    if (
+        publication_key(post) != str(pending.get("approved_at", ""))
+        or publication_confirmation_fingerprint(post) != str(pending.get("fingerprint", ""))
+    ):
+        session.pop("pending_platform_publication", None)
+        return None, None, "O conteúdo do post mudou desde a confirmação inicial. Revise o post e inicie novamente."
+    return pending, post, None
+
+
 @app.route("/instagram/publish", methods=["POST"])
 def instagram_publish():
+    # Legacy Instagram-only button now uses the same server-rendered confirmation step.
     try:
         post_index = int(request.form.get("post_index", "0"))
     except (TypeError, ValueError):
         post_index = 0
-    if request.form.get("confirm") != "yes":
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="Publicação cancelada: confirmação não recebida."))
-    try:
-        publish_instagram_for_post(post_index)
-        return redirect(url_for("instagram_central", post=post_index, published="1"))
-    except Exception as exc:
-        safe = _safe_error_message(exc)
-        try:
-            history = enrich_history(load_history())
-            if 0 <= post_index < len(history):
-                log_platform_attempt("instagram", history[post_index], "ERRO", safe)
-        except Exception:
-            pass
-        return redirect(url_for("instagram_central", post=post_index, oauth_error=f"Falha na publicação no Instagram: {safe[:350]}"))
+    return _prepare_publication_confirmation(post_index, {"instagram"})
 
 
 @app.route("/publicar-plataformas", methods=["POST"])
@@ -1877,41 +1981,103 @@ def publish_selected_platforms():
         post_index = int(request.form.get("post_index", "0"))
     except (TypeError, ValueError):
         post_index = 0
-    if request.form.get("confirm") != "yes":
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="Publicação cancelada: confirmação não recebida."))
-    selected = {value for value in request.form.getlist("platforms") if value in {"instagram", "facebook"}}
-    if not selected:
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="Selecione pelo menos uma plataforma para publicar."))
+    selected = set(request.form.getlist("platforms"))
+    # This request only prepares a confirmation intent. It cannot publish anything.
+    return _prepare_publication_confirmation(post_index, selected)
 
-    post = {}
+
+def _render_publication_confirmation(pending, post, confirmation_error=None):
+    """Render the exact target captions for the pending platform selection."""
+    selected = pending["platforms"]
+    draft = load_publication_draft() if "instagram" in selected else {}
+    instagram_caption = str(draft.get("full_caption") or "") if "instagram" in selected else ""
+    facebook_caption = build_full_caption(post) if "facebook" in selected else ""
+    return render_template(
+        "confirm_platform_publication.html",
+        pending=pending,
+        post=post,
+        post_index=int(pending["post_index"]),
+        selected_platforms=selected,
+        confirmation_id=pending["id"],
+        instagram_caption_preview=instagram_caption,
+        facebook_caption_preview=facebook_caption,
+        connection=load_instagram_connection(),
+        facebook_connection=load_facebook_connection(),
+        confirmation_minutes=PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS // 60,
+        confirmation_error=confirmation_error,
+    )
+
+
+@app.route("/publicar-plataformas/confirmar", methods=["GET", "POST"])
+def confirm_platform_publication():
+    if request.method == "GET":
+        pending, post, error = _load_pending_publication_confirmation()
+        if error:
+            return redirect(url_for("instagram_central", oauth_error=error))
+        return _render_publication_confirmation(pending, post)
+
+    pending = session.get("pending_platform_publication")
+    supplied_id = request.form.get("confirmation_id", "")
+    if (
+        not isinstance(pending, dict)
+        or not pending.get("id")
+        or not supplied_id
+        or not secrets.compare_digest(str(pending.get("id", "")), supplied_id)
+    ):
+        session.pop("pending_platform_publication", None)
+        return redirect(url_for(
+            "instagram_central",
+            oauth_error="Confirmação ausente ou inválida. Nenhuma plataforma foi publicada.",
+        ))
+
+    action = request.form.get("action", "")
+    if action == "cancel":
+        session.pop("pending_platform_publication", None)
+        return redirect(url_for("instagram_central", post=pending.get("post_index", 0), publication_cancelled="1"))
+    if action != "publish":
+        session.pop("pending_platform_publication", None)
+        return redirect(url_for(
+            "instagram_central",
+            post=pending.get("post_index", 0),
+            oauth_error="Ação de confirmação inválida. Nenhuma plataforma foi publicada.",
+        ))
+
+    # Enforce explicit acknowledgement on the server; browser-required is only a convenience.
+    if request.form.get("acknowledge") != "yes":
+        pending, post, error = _load_pending_publication_confirmation()
+        if error:
+            return redirect(url_for("instagram_central", oauth_error=error))
+        return _render_publication_confirmation(
+            pending,
+            post,
+            confirmation_error="Marque a caixa de autorização para confirmar. Nenhuma publicação foi feita.",
+        )
+
+    pending, post, error = _load_pending_publication_confirmation()
+    if error:
+        return redirect(url_for("instagram_central", oauth_error=error))
+    post_index = int(pending["post_index"])
+    selected = list(pending["platforms"])
+
+    # Recheck authorization, media and duplicate guards at the moment of confirmation.
     try:
-        history = reconcile_publication_records(enrich_history(load_history()))
-        if not (0 <= post_index < len(history)):
-            raise RuntimeError("Post aprovado não encontrado.")
-        post = history[post_index]
-        if "instagram" in selected:
-            preflight_instagram_for_post(post_index)
-        if "facebook" in selected:
-            fb_connection = load_facebook_connection()
-            fb_audit = load_facebook_publication_audit()
-            if not fb_connection.get("access_token") or not fb_connection.get("page_id"):
-                raise RuntimeError("Conecte a Página do Facebook antes de publicar.")
-            if find_facebook_publication_record(post, fb_audit, fb_connection.get("page_id", "")):
-                raise RuntimeError("Este post já foi publicado no Facebook. A duplicação foi bloqueada.")
-            facebook_media_urls(post)
+        post = _preflight_selected_platforms(post_index, selected)
     except Exception as exc:
+        session.pop("pending_platform_publication", None)
         message = _safe_error_message(exc)[:350]
-        for platform in sorted(selected):
+        for platform in selected:
             try:
                 log_platform_attempt(platform, post or {"approved_at": "", "vehicle": "", "service": ""}, "BLOQUEADO", message)
             except Exception:
                 pass
         session["last_platform_results"] = [
             {"platform": platform, "status": "BLOQUEADO", "message": message}
-            for platform in sorted(selected)
+            for platform in selected
         ]
         return redirect(url_for("instagram_central", post=post_index, platforms_result="1"))
 
+    # Consume the pending intent before making any external publishing request.
+    session.pop("pending_platform_publication", None)
     results = []
     for platform in ("instagram", "facebook"):
         if platform not in selected:
@@ -1923,7 +2089,11 @@ def publish_selected_platforms():
             else:
                 record = publish_facebook_for_post(post_index)
                 label, target_id = "Facebook", record.get("post_id", "")
-            results.append({"platform": platform, "status": "PUBLICADO", "message": f"{label} publicado. ID: {target_id}"})
+            results.append({
+                "platform": platform,
+                "status": "PUBLICADO",
+                "message": f"{label} publicado. ID: {target_id}",
+            })
         except Exception as exc:
             message = _safe_error_message(exc)[:350]
             try:
@@ -1935,6 +2105,7 @@ def publish_selected_platforms():
             results.append({"platform": platform, "status": "ERRO", "message": message})
     session["last_platform_results"] = results
     return redirect(url_for("instagram_central", post=post_index, platforms_result="1"))
+
 
 @app.route("/fila-publicacoes", methods=["GET"])
 def publication_queue():

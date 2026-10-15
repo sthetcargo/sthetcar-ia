@@ -67,6 +67,7 @@ body{font-family:Arial,sans-serif;background:#f5f6f8;color:#20242b;margin:0}.wra
 {% if already_published %}<div class="notice success">🛡️ <strong>Este post já foi publicado.</strong> A integração encontrou o registro da publicação e bloqueou uma nova publicação para evitar duplicidade.</div>{% endif %}
 {% if setup_missing %}<div class="notice">⚙️ <strong>Configuração pendente:</strong> ainda faltam as credenciais do app Meta no arquivo <code>.env</code>.</div>{% endif %}
 {% if oauth_error %}<div class="notice error">❌ <strong>Não foi possível concluir:</strong> {{ oauth_error }}</div>{% endif %}
+{% if request.args.get("publication_cancelled") == "1" %}<div class="notice">↩️ Publicação cancelada. Nenhum post foi enviado por essa confirmação.</div>{% endif %}
 {% if disconnected %}<div class="notice">🔌 A conexão local foi removida deste computador.</div>{% endif %}
 {% if platform_results %}
 <div class="platform-results">
@@ -104,7 +105,7 @@ body{font-family:Arial,sans-serif;background:#f5f6f8;color:#20242b;margin:0}.wra
 {% if draft and draft_matches_selected and draft.status == 'PUBLICADO NO INSTAGRAM' %}
 <span class="btn green">✅ PUBLICADO NO INSTAGRAM</span>
 {% elif draft and draft_matches_selected and draft.container_id %}
-<form method="post" action="{{ url_for('instagram_publish') }}" onsubmit="return confirm('ATENÇÃO: publicar agora no Instagram @{{ connection.username }}? Esta ação é REAL e o post será enviado para o Instagram.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><input type="hidden" name="confirm" value="yes"><button class="btn publish" type="submit">🚀 PUBLICAR NO INSTAGRAM</button></form>
+<form method="post" action="{{ url_for('instagram_publish') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn publish" type="submit">🔎 REVISAR E CONFIRMAR NO INSTAGRAM</button></form>
 {% else %}
 <form method="post" action="{{ url_for('instagram_test_media') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn blue" type="submit">🧪 Preparar e testar mídia (sem publicar)</button></form>
 {% endif %}
@@ -123,14 +124,14 @@ body{font-family:Arial,sans-serif;background:#f5f6f8;color:#20242b;margin:0}.wra
 {% if post and ((connection and connection.username and not already_published) or (facebook_connection and facebook_connection.page_id and not facebook_already_published)) %}
 <div class="card" style="margin-top:18px;background:#fff;box-shadow:none;border:2px solid #d6e8dd">
   <h3 style="margin-top:0">📣 Publicar nas plataformas selecionadas</h3>
-  <p>Instagram e Facebook têm registros independentes. Quando estiverem conectados e prontos, as duas opções ficam marcadas por padrão. Cada publicação é real e exige confirmação.</p>
-  <form method="post" action="{{ url_for('publish_selected_platforms') }}" onsubmit="return confirm('CONFIRMAR PUBLICAÇÃO REAL nas plataformas marcadas? Cada plataforma terá resultado e registro próprios.');">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><input type="hidden" name="confirm" value="yes">
+  <p>Instagram e Facebook têm registros independentes. Quando estiverem conectados e prontos, as duas opções ficam marcadas por padrão. A primeira etapa só abre uma revisão. A publicação real só ocorre depois de revisar o conteúdo e marcar a autorização na tela seguinte.</p>
+  <form method="post" action="{{ url_for('publish_selected_platforms') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}">
     <div class="platform-options">
       <label class="platform-option"><input type="checkbox" name="platforms" value="instagram" {% if connection and connection.username and not already_published and instagram_media_ready %}checked{% elif not (connection and connection.username and not already_published and instagram_media_ready) %}disabled{% endif %}><span><strong>Instagram</strong><small>{% if already_published %}Este post já foi publicado no Instagram.{% elif not (connection and connection.username) %}Conecte o Instagram para habilitar.{% elif not draft_matches_selected %}Prepare e teste a mídia deste post primeiro.{% elif not instagram_media_ready %}A mídia ainda não confirmou FINISHED no Instagram.{% else %}Conta @{{ connection.username }} — mídia pronta.{% endif %}</small></span></label>
       <label class="platform-option"><input type="checkbox" name="platforms" value="facebook" {% if facebook_connection and facebook_connection.page_id and not facebook_already_published %}checked{% elif not (facebook_connection and facebook_connection.page_id and not facebook_already_published) %}disabled{% endif %}><span><strong>Facebook</strong><small>{% if facebook_already_published %}Este post já foi publicado no Facebook.{% elif facebook_connection and facebook_connection.page_id %}Página {{ facebook_connection.page_name or facebook_connection.page_id }} — pronta para publicar.{% else %}Conecte a Página do Facebook para habilitar.{% endif %}</small></span></label>
     </div>
-    <button class="btn publish" type="submit">🚀 PUBLICAR NAS PLATAFORMAS MARCADAS</button>
+    <button class="btn publish" type="submit">🔎 REVISAR E CONFIRMAR AS PLATAFORMAS MARCADAS</button>
   </form>
 </div>
 {% endif %}

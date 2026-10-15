@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Confirmar publicação — Sthetcar IA</title>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f8;color:#20242b;font-family:Arial,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:28px 16px 48px}
+.card{background:#fff;border:1px solid #e1e3e8;border-radius:16px;padding:22px;margin-bottom:16px;box-shadow:0 6px 20px rgba(0,0,0,.035)}
+h1{font-size:27px;line-height:1.2;margin:0 0 10px}
+h2{font-size:19px;margin:0 0 14px}
+p{line-height:1.5}
+.muted{color:#66707d;font-size:13px}
+.notice{background:#fff4d8;border:1px solid #efd58c;color:#72510b;border-radius:12px;padding:14px;line-height:1.5}
+.error{background:#fff0f0;border-color:#f0c5c5;color:#9b1c1c}
+.tags{display:flex;flex-wrap:wrap;gap:8px}
+.tag{display:inline-block;background:#e9f8ef;border:1px solid #b9e6c8;color:#166534;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:800}
+.box{background:#fafbfc;border:1px solid #e4e6ea;border-radius:12px;padding:14px;white-space:pre-wrap;line-height:1.55;overflow-wrap:anywhere}
+.photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.photos img,.photos video{display:block;width:100%;max-height:300px;object-fit:contain;background:#111;border-radius:10px}
+.photo-label{font-size:12px;font-weight:800;color:#66707d;margin:0 0 7px}
+.ack{display:flex;gap:12px;align-items:flex-start;margin:18px 0;padding:15px;border:1px solid #d9dde4;border-radius:12px;background:#fafbfc;line-height:1.45}
+.ack input{margin-top:4px;transform:scale(1.2)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+button,a.btn{font:inherit;font-weight:800;padding:13px 17px;border:0;border-radius:10px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.publish{background:#b42318;color:#fff}
+.cancel{background:#eef0f3;color:#30343b}
+button:disabled{opacity:.65;cursor:wait}
+@media(max-width:620px){.wrap{padding:14px 10px 35px}.card{padding:16px}h1{font-size:23px}.photos{grid-template-columns:1fr}.actions{flex-direction:column}.actions button{width:100%;min-height:48px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section class="card">
+    <p class="muted"><a href="{{ url_for('instagram_central', post=post_index) }}">← Voltar à central sem publicar</a></p>
+    <h1>Confirmar publicação real</h1>
+    <p>Esta é uma etapa separada de confirmação. <strong>Nenhuma publicação foi feita ao abrir esta tela.</strong></p>
+    <div class="notice">Ao confirmar, o Sthetcar IA enviará este conteúdo às plataformas abaixo. A publicação é real. Se mais de uma plataforma estiver selecionada, cada envio tem resultado independente: uma publicação bem-sucedida não é desfeita caso a outra falhe.</div>
+  </section>
+
+  <section class="card">
+    <h2>Post que será publicado</h2>
+    <p><strong>{{ post.vehicle or 'Veículo não informado' }}</strong> · {{ post.service or 'Serviço não informado' }}</p>
+    <div class="photos">
+      <div>
+        <p class="photo-label">ANTES</p>
+        {% for image_ref in post.before_images or ([post.before_image] if post.before_image else []) %}
+          {% if image_ref %}{% if image_ref|is_video_media %}<video src="{{ image_ref|media_url }}" controls muted playsinline></video>{% else %}<img src="{{ image_ref|media_url }}" alt="Foto antes">{% endif %}{% endif %}
+        {% endfor %}
+      </div>
+      <div>
+        <p class="photo-label">DEPOIS</p>
+        {% for image_ref in post.after_images or ([post.after_image] if post.after_image else []) %}
+          {% if image_ref %}{% if image_ref|is_video_media %}<video src="{{ image_ref|media_url }}" controls muted playsinline></video>{% else %}<img src="{{ image_ref|media_url }}" alt="Foto depois">{% endif %}{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <h2 style="margin-top:20px">Texto exato por plataforma</h2>
+    {% if 'instagram' in selected_platforms %}
+      <h3>Instagram · @{{ connection.username }}</h3>
+      <div class="box">{{ instagram_caption_preview }}</div>
+    {% endif %}
+    {% if 'facebook' in selected_platforms %}
+      <h3>Facebook · {{ facebook_connection.page_name or facebook_connection.page_id }}</h3>
+      <div class="box">{{ facebook_caption_preview }}</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Destino da publicação</h2>
+    <div class="tags">
+      {% for platform in selected_platforms %}
+        {% if platform == 'facebook' %}
+          <span class="tag">Facebook · {{ facebook_connection.page_name or facebook_connection.page_id }}</span>
+        {% elif platform == 'instagram' %}
+          <span class="tag">Instagram · @{{ connection.username }}</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <p class="muted">Esta confirmação vale somente para o post exibido e para as plataformas selecionadas. Ela expira em {{ confirmation_minutes }} minutos.</p>
+
+    {% if confirmation_error %}<div class="notice error" role="alert">{{ confirmation_error }}</div>{% endif %}
+    <form method="post" action="{{ url_for('confirm_platform_publication') }}" id="publication-confirmation-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirmation_id" value="{{ confirmation_id }}">
+      <input type="hidden" name="action" value="publish">
+      <label class="ack">
+        <input type="checkbox" name="acknowledge" value="yes" required>
+        <span>Confirmo que revisei o veículo, o serviço, as fotos, a legenda e os destinos acima, e autorizo a publicação real somente nas plataformas listadas.</span>
+      </label>
+      <div class="actions">
+        <button class="publish" type="submit" id="confirm-publish-button">🚀 Confirmar e publicar agora</button>
+      </div>
+    </form>
+    <form method="post" action="{{ url_for('confirm_platform_publication') }}" style="margin-top:10px" id="cancel-publication-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirmation_id" value="{{ confirmation_id }}">
+      <input type="hidden" name="action" value="cancel">
+      <button class="cancel" type="submit">Cancelar, não publicar</button>
+    </form>
+    <p class="muted">O sistema revalida o post, a conexão e o bloqueio de duplicação antes de enviar. Se algo tiver mudado, a publicação será bloqueada.</p>
+  </section>
+</main>
+<script>
+document.getElementById("publication-confirmation-form").addEventListener("submit", function () {
+  const submitter = document.getElementById("confirm-publish-button");
+  if (!this.querySelector('input[name="acknowledge"]').checked) return;
+  submitter.disabled = true;
+  submitter.textContent = "Processando publicação...";
+});
+</script>
+</body>
+</html>
