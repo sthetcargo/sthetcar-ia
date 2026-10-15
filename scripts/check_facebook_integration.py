@@ -106,6 +106,21 @@ assert "app.logger.exception(\"Falha ao reescrever legenda;" in rewrite_source
 assert "_friendly_caption_rewrite_error(exc)" in rewrite_source
 assert "original_pending = copy.deepcopy(pending)" in rewrite_source
 assert '"rewrite_error.html"' in rewrite_source
+assert "difflib.SequenceMatcher" in rewrite_source, "Rewrite route must reject captions too similar to the current caption"
+assert "igual ou muito parecida" in rewrite_source, "Rewrite route must explain when a new caption was not meaningfully different"
+
+# Gemini rewriter may not silently return the source caption when attempts fail.
+gemini_path = root / "app" / "ai" / "gemini.py"
+gemini_source = gemini_path.read_text(encoding="utf-8")
+gemini_tree = ast.parse(gemini_source, filename=str(gemini_path))
+gemini_functions = {
+    node.name: node for node in ast.walk(gemini_tree)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+}
+rewrite_caption_source = ast.get_source_segment(gemini_source, gemini_functions["rewrite_caption"])
+assert "return source_caption or _fallback_caption" not in rewrite_caption_source, "Rewriter must not report the original caption as a successful rewrite"
+assert "A IA não conseguiu produzir uma legenda suficientemente diferente" in rewrite_caption_source
+
 
 # Parse the review and safe error templates, too.
 review_template_path = root / "app" / "templates" / "review_pending.html"
@@ -133,4 +148,4 @@ assert 'url_for(\'instagram_publish\') }}" onsubmit=' not in template, "Instagra
 assert 'name="confirm" value="yes"' not in template, "Do not trust hidden confirmation flags"
 assert 'name="access_token"' not in template + confirm_template, "Templates must never render an access-token form field"
 
-print("PASS: Python AST, Facebook routes, publication confirmation guards, caption rewrite error handling, and all relevant Jinja templates.")
+print("PASS: Python AST, Facebook routes, publication confirmation guards, real caption-change guards, rewrite error handling, and relevant Jinja templates.")
