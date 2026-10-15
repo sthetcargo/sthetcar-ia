@@ -100,7 +100,7 @@ assert 'session.pop("pending_platform_publication", None)' in confirm_source
 rewrite_source = ast.get_source_segment(source, function_nodes["rewrite_pending_caption"])
 try_pos = rewrite_source.find("try:")
 assert try_pos >= 0, "Caption rewrite route must guard potentially failing operations"
-assert rewrite_source.find("queue = load_approval_queue()") < try_pos, "Queue access should be enclosed in the rewrite exception guard"
+assert rewrite_source.find("queue = load_approval_queue()") > try_pos, "Queue access should be enclosed in the rewrite exception guard"
 assert "str(request.form.get(\"current_caption\") or pending.get(\"caption\") or \"\").strip()" in rewrite_source
 assert "app.logger.exception(\"Falha ao reescrever legenda;" in rewrite_source
 assert "_friendly_caption_rewrite_error(exc)" in rewrite_source
