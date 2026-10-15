@@ -47,7 +47,7 @@
 </style></head>
 <body><main class="shell">
 <header class="top"><div><div class="brand">🚗 Sthetcar AI</div><div class="sub">Revisão e organização antes da aprovação</div></div><span class="badge">🕐 AGUARDANDO APROVAÇÃO</span></header>
-{% if request.args.get("rewritten") %}<div class="success"><strong>Legenda reescrita com sucesso.</strong> A IA criou uma nova legenda e novas hashtags usando a mesma análise e as mesmas fotos.</div>{% elif request.args.get("rewrite_error") %}<div class="warning"><strong>Não foi possível reescrever a legenda.</strong> {{ request.args.get("rewrite_error") }}</div>{% endif %}<div class="success"><strong>Conteúdo preservado.</strong> A IA já terminou a análise e o trabalho ficou salvo. Você pode revisar, reorganizar ou descartar sem reenviar as fotos.</div>
+{% if request.args.get("rewritten") %}<div class="success"><strong>Legenda reescrita com sucesso.</strong> A IA criou uma nova legenda e novas hashtags usando a mesma análise e as mesmas fotos.</div>{% elif rewrite_error or request.args.get("rewrite_error") %}<div class="warning"><strong>Não foi possível reescrever a legenda.</strong> {{ rewrite_error or request.args.get("rewrite_error") }}</div>{% endif %}<div class="success"><strong>Conteúdo preservado.</strong> A IA já terminou a análise e o trabalho ficou salvo. Você pode revisar, reorganizar ou descartar sem reenviar as fotos.</div>
 <div class="grid">
 <section class="card">
   <h2>Prévia do post</h2>
