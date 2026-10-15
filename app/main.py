@@ -30,6 +30,8 @@ PUBLICATION_DRAFT_PATH = GENERATED_DIR / "instagram_publication_draft.json"
 APPROVAL_QUEUE_PATH = GENERATED_DIR / "fila_aprovacao.json"
 DISCARDED_PATH = GENERATED_DIR / "posts_descartados.json"
 PUBLICATION_DISCARDED_PATH = GENERATED_DIR / "posts_publicacao_descartados.json"
+FACEBOOK_CONNECTION_PATH = GENERATED_DIR / "facebook_connection.json"
+FACEBOOK_PUBLICATION_AUDIT_FILE = GENERATED_DIR / "publicacoes_facebook.json"
 
 for folder in (BEFORE_DIR, AFTER_DIR, GENERATED_DIR):
     folder.mkdir(parents=True, exist_ok=True)
@@ -44,6 +46,15 @@ def load_publication_audit():
 
 def save_publication_audit(items):
     _save_state("publication_audit", PUBLICATION_AUDIT_FILE, items)
+
+
+def load_facebook_publication_audit():
+    data = _load_state("facebook_publication_audit", FACEBOOK_PUBLICATION_AUDIT_FILE, [])
+    return data if isinstance(data, list) else []
+
+
+def save_facebook_publication_audit(items):
+    _save_state("facebook_publication_audit", FACEBOOK_PUBLICATION_AUDIT_FILE, items)
 
 
 def publication_key(post):
@@ -177,6 +188,8 @@ STATE_FILES = {
     "history": HISTORY_PATH,
     "approval_queue": APPROVAL_QUEUE_PATH,
     "instagram_connection": META_TOKEN_PATH,
+    "facebook_connection": FACEBOOK_CONNECTION_PATH,
+    "facebook_publication_audit": FACEBOOK_PUBLICATION_AUDIT_FILE,
     "publication_draft": PUBLICATION_DRAFT_PATH,
     "discarded_posts": DISCARDED_PATH,
     "publication_discarded": PUBLICATION_DISCARDED_PATH,
@@ -190,6 +203,9 @@ STATE_FILES = {
 # old local JSON snapshot automatically.
 OPTIONAL_STATE_DEFAULTS = {
     "discarded_posts": [],
+    # New Facebook keys are optional until the owner connects the Page.
+    "facebook_connection": {},
+    "facebook_publication_audit": [],
 }
 
 
@@ -255,6 +271,41 @@ def instagram_config():
         "redirect_uri": os.getenv("INSTAGRAM_REDIRECT_URI", "http://127.0.0.1:8001/auth/instagram/callback").strip(),
         "api_version": os.getenv("META_GRAPH_VERSION", "v26.0").strip(),
     }
+
+
+def facebook_config():
+    """Separate Facebook Page OAuth config while reusing the existing Meta app."""
+    ig_cfg = instagram_config()
+    redirect_uri = os.getenv("FACEBOOK_REDIRECT_URI", "").strip()
+    if not redirect_uri:
+        ig_redirect = ig_cfg.get("redirect_uri", "")
+        if "/auth/instagram/callback" in ig_redirect:
+            redirect_uri = ig_redirect.replace("/auth/instagram/callback", "/auth/facebook/callback")
+        else:
+            public_base = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+            redirect_uri = f"{public_base}/auth/facebook/callback" if public_base else "http://127.0.0.1:8001/auth/facebook/callback"
+    return {
+        "app_id": ig_cfg["app_id"],
+        "app_secret": ig_cfg["app_secret"],
+        "redirect_uri": redirect_uri,
+        "api_version": os.getenv("META_GRAPH_VERSION", "v26.0").strip(),
+        "page_id": os.getenv("FACEBOOK_PAGE_ID", "").strip(),
+        "login_config_id": os.getenv("FACEBOOK_LOGIN_CONFIG_ID", "").strip(),
+    }
+
+
+def facebook_meta_ready():
+    cfg = facebook_config()
+    return bool(cfg["app_id"] and cfg["app_secret"] and cfg["redirect_uri"] and cfg["login_config_id"])
+
+
+def load_facebook_connection():
+    data = _load_state("facebook_connection", FACEBOOK_CONNECTION_PATH, {})
+    return data if isinstance(data, dict) else {}
+
+
+def save_facebook_connection(data):
+    _save_state("facebook_connection", FACEBOOK_CONNECTION_PATH, data)
 
 
 def load_instagram_connection():
@@ -467,11 +518,21 @@ def build_publication_draft(post, post_index, connection):
 
 
 def draft_matches_post(draft, post, post_index, connection):
+    """Only reuse a draft when identity AND the effective approved content match."""
+    if not draft or not post:
+        return False
+    expected_caption = (post.get("caption") or "").strip()
+    expected_hashtags = (post.get("hashtags") or "").strip()
+    if not expected_hashtags:
+        expected_hashtags = fallback_hashtags(post.get("vehicle", ""), post.get("service", ""))
     return (
-        bool(draft)
-        and str(draft.get("post_index", "")) == str(post_index)
+        str(draft.get("post_index", "")) == str(post_index)
         and draft.get("approved_at", "") == post.get("approved_at", "")
         and draft.get("instagram", {}).get("user_id", "") == connection.get("user_id", "")
+        and (draft.get("caption") or "").strip() == expected_caption
+        and (draft.get("hashtags") or "").strip() == expected_hashtags
+        and draft.get("vehicle", "") == post.get("vehicle", "")
+        and draft.get("service", "") == post.get("service", "")
     )
 
 
@@ -524,7 +585,7 @@ def get_instagram_profile(access_token):
 
 
 
-def _http_json_request(url, data=None, method="GET", timeout=60):
+def _http_json_request(url, data=None, method="GET", timeout=60, api_label="Instagram API"):
     payload = None
     headers = {"Accept": "application/json", "User-Agent": "Sthetcar-IA/29.0"}
     if data is not None:
@@ -541,7 +602,282 @@ def _http_json_request(url, data=None, method="GET", timeout=60):
             detail = json.loads(body)
         except json.JSONDecodeError:
             detail = {"raw": body}
-        raise RuntimeError(f"Instagram API {exc.code}: {json.dumps(detail, ensure_ascii=False)}") from exc
+        raise RuntimeError(f"{api_label} {exc.code}: {json.dumps(detail, ensure_ascii=False)}") from exc
+
+
+
+
+
+def facebook_graph_request(path, access_token, params=None, data=None, method="GET", timeout=60):
+    """Call the Facebook Graph API without returning credentials to the UI."""
+    cfg = facebook_config()
+    endpoint = f"https://graph.facebook.com/{cfg['api_version']}/{str(path).lstrip('/')}"
+    try:
+        if method.upper() == "GET":
+            query = dict(params or {})
+            query["access_token"] = access_token
+            url = f"{endpoint}?{urllib.parse.urlencode(query)}"
+            return _http_json_request(url, method="GET", timeout=timeout, api_label="Facebook Graph API")
+        payload = dict(data or {})
+        payload["access_token"] = access_token
+        return _http_json_request(endpoint, data=payload, method=method.upper(), timeout=timeout, api_label="Facebook Graph API")
+    except Exception as exc:
+        raise RuntimeError(_safe_error_message(exc)) from exc
+
+
+def facebook_media_urls(post):
+    """Resolve approved photos to signed URLs; the Facebook flow deliberately excludes video."""
+    before = [x for x in (post.get("before_images") or [post.get("before_image")]) if x]
+    after = [x for x in (post.get("after_images") or [post.get("after_image")]) if x]
+    if len(before) + len(after) > 10:
+        raise RuntimeError("O Facebook permite no máximo 10 fotos por publicação. Reduza a quantidade na fila antes de publicar.")
+    items = instagram_media_items(post)
+    if any(str(item.get("media_type", "")).upper() != "IMAGE" for item in items):
+        raise RuntimeError("A publicação no Facebook aceita somente fotos neste fluxo. O fluxo do Instagram permanece separado.")
+    urls = [str(item.get("url", "")).strip() for item in items if str(item.get("url", "")).strip()]
+    if not urls:
+        raise RuntimeError("Nenhuma foto válida foi encontrada para publicação no Facebook.")
+    return urls
+
+
+def build_full_caption(post):
+    caption = (post.get("caption") or "").strip()
+    hashtags = (post.get("hashtags") or "").strip()
+    if not hashtags:
+        hashtags = fallback_hashtags(post.get("vehicle", ""), post.get("service", ""))
+    return f"{caption}\n\n{hashtags}".strip() if hashtags else caption
+
+
+def find_facebook_publication_record(post, audit=None, page_id=""):
+    publication = post.get("facebook_publication") or {}
+    if str(publication.get("status", "")).upper() == "PUBLICADO":
+        if not page_id or not publication.get("page_id") or str(publication.get("page_id")) == str(page_id):
+            return publication
+    key = publication_key(post)
+    if not key:
+        return {}
+    audit = audit if audit is not None else load_facebook_publication_audit()
+    for record in audit:
+        if str(record.get("approved_at", "")).strip() != key:
+            continue
+        if str(record.get("status", "")).upper() != "PUBLICADO":
+            continue
+        record_page = str(record.get("page_id", "")).strip()
+        if page_id and record_page and record_page != str(page_id):
+            continue
+        return record
+    return {}
+
+
+def _safe_error_message(message):
+    """Redact credentials if an upstream error ever echoes a token or secret."""
+    value = str(message or "")
+    value = re.sub(r"(?i)(access_token|fb_exchange_token|client_secret|token)\s*[=:]\s*[^&\s,}]+", r"\1=[REDACTED]", value)
+    value = re.sub(r"EAA[A-Za-z0-9]{20,}", "[REDACTED_ACCESS_TOKEN]", value)
+    return value[:500]
+
+
+def log_platform_attempt(platform, post, status, message=""):
+    """Keep failed/blocked attempts separate for each platform."""
+    item = {
+        "attempted_at": datetime.now().isoformat(timespec="seconds"),
+        "status": status,
+        "platform": platform,
+        "approved_at": post.get("approved_at", ""),
+        "publication_key": publication_key(post),
+        "vehicle": post.get("vehicle", ""),
+        "service": post.get("service", ""),
+        "message": _safe_error_message(message),
+    }
+    if platform == "facebook":
+        audit = load_facebook_publication_audit()
+        audit.insert(0, item)
+        save_facebook_publication_audit(audit)
+    else:
+        audit = load_publication_audit()
+        audit.insert(0, item)
+        save_publication_audit(audit)
+    return item
+
+
+def publish_facebook_for_post(post_index):
+    history = enrich_history(load_history())
+    connection = load_facebook_connection()
+    audit = load_facebook_publication_audit()
+    if not connection.get("access_token") or not connection.get("page_id"):
+        raise RuntimeError("Conecte a Página do Facebook antes de publicar.")
+    if not (0 <= post_index < len(history)):
+        raise RuntimeError("Post aprovado não encontrado.")
+    post = history[post_index]
+    previous = find_facebook_publication_record(post, audit, connection.get("page_id", ""))
+    if previous:
+        raise RuntimeError("Este post já foi publicado no Facebook. A duplicação foi bloqueada.")
+
+    urls = facebook_media_urls(post)
+    caption = build_full_caption(post)
+    page_id = connection["page_id"]
+    media_ids = []
+    if len(urls) == 1:
+        result = facebook_graph_request(
+            f"{page_id}/photos",
+            connection["access_token"],
+            data={"url": urls[0], "caption": caption, "published": "true", "is_gen_ai": "false"},
+            method="POST",
+            timeout=90,
+        )
+        media_id = result.get("id")
+        if not media_id:
+            raise RuntimeError("O Facebook não retornou o ID da foto publicada.")
+        media_ids.append(str(media_id))
+        post_id = result.get("post_id") or media_id
+    else:
+        for url in urls:
+            result = facebook_graph_request(
+                f"{page_id}/photos",
+                connection["access_token"],
+                data={"url": url, "published": "false", "is_gen_ai": "false"},
+                method="POST",
+                timeout=90,
+            )
+            media_id = result.get("id")
+            if not media_id:
+                raise RuntimeError("O Facebook não retornou o ID de uma foto para montar a publicação.")
+            media_ids.append(str(media_id))
+        attached = {
+            f"attached_media[{i}]": json.dumps({"media_fbid": media_id})
+            for i, media_id in enumerate(media_ids)
+        }
+        result = facebook_graph_request(
+            f"{page_id}/feed",
+            connection["access_token"],
+            data={"message": caption, **attached},
+            method="POST",
+            timeout=90,
+        )
+        post_id = result.get("id")
+        if not post_id:
+            raise RuntimeError("O Facebook não retornou o ID da publicação criada.")
+
+    now = datetime.now().isoformat(timespec="seconds")
+    record = {
+        "published_at": now,
+        "status": "PUBLICADO",
+        "platform": "facebook",
+        "post_id": str(post_id),
+        "media_ids": media_ids,
+        "page_id": str(page_id),
+        "page_name": connection.get("page_name", ""),
+        "post_index": post_index,
+        "approved_at": post.get("approved_at", ""),
+        "publication_key": publication_key(post),
+        "vehicle": post.get("vehicle", ""),
+        "service": post.get("service", ""),
+    }
+    post["facebook_publication"] = record
+    save_history(history)
+    audit = load_facebook_publication_audit()
+    if not any(
+        str(item.get("approved_at", "")).strip() == publication_key(post)
+        and str(item.get("page_id", "")) == str(page_id)
+        and str(item.get("status", "")).upper() == "PUBLICADO"
+        for item in audit
+    ):
+        audit.insert(0, record)
+    save_facebook_publication_audit(audit)
+    return record
+
+
+def preflight_instagram_for_post(post_index):
+    history = reconcile_publication_records(enrich_history(load_history()))
+    connection = load_instagram_connection()
+    audit = load_publication_audit()
+    draft = load_publication_draft()
+    if not connection.get("access_token") or not connection.get("username"):
+        raise RuntimeError("Instagram não está conectado.")
+    if not (0 <= post_index < len(history)):
+        raise RuntimeError("Post aprovado não encontrado.")
+    post = history[post_index]
+    if find_publication_record(post, audit, connection.get("username", "")):
+        raise RuntimeError("Este post já foi publicado no Instagram.")
+    if not draft_matches_post(draft, post, post_index, connection):
+        raise RuntimeError("O rascunho do Instagram não corresponde ao post selecionado. Prepare e teste a mídia deste post.")
+    container_id = (draft.get("container_id") or "").strip()
+    if not container_id:
+        raise RuntimeError("Prepare e teste a mídia no Instagram antes de publicar.")
+    status = instagram_container_status(connection, container_id)
+    status_code = (status.get("status_code") or "").upper()
+    if status_code not in {"FINISHED", "PUBLISHED"}:
+        raise RuntimeError(f"O Instagram ainda está processando a mídia: {status_code or 'status desconhecido'}.")
+    if status_code == "PUBLISHED" and not draft.get("published_media_id"):
+        raise RuntimeError("O Instagram já marca a mídia como publicada, mas não há ID local registrado. Para evitar duplicação, não publicaremos outra plataforma por este fluxo até revisar o registro.")
+    return True
+
+
+def publish_instagram_for_post(post_index):
+    history = reconcile_publication_records(enrich_history(load_history()))
+    connection = load_instagram_connection()
+    audit = load_publication_audit()
+    draft = load_publication_draft()
+    if not connection.get("access_token") or not connection.get("username"):
+        raise RuntimeError("Instagram não está conectado.")
+    if not (0 <= post_index < len(history)):
+        raise RuntimeError("Post aprovado não encontrado.")
+    post = history[post_index]
+    prior = find_publication_record(post, audit, connection.get("username", ""))
+    if prior:
+        raise RuntimeError("Este post já consta como publicado no Instagram. A duplicação foi bloqueada.")
+    if not draft_matches_post(draft, post, post_index, connection):
+        raise RuntimeError("O rascunho não corresponde ao post aprovado atual. Prepare a mídia deste post novamente.")
+    container_id = (draft.get("container_id") or "").strip()
+    if not container_id:
+        raise RuntimeError("Prepare e teste a mídia no Instagram antes de publicar.")
+
+    status = instagram_container_status(connection, container_id)
+    status_code = (status.get("status_code") or "").upper()
+    if status_code not in {"FINISHED", "PUBLISHED"}:
+        raise RuntimeError(f"O Instagram ainda está processando a mídia: {status_code or 'status desconhecido'}.")
+    if status_code == "PUBLISHED":
+        if not draft.get("published_media_id"):
+            raise RuntimeError("O Instagram já marca a mídia como publicada, mas não há ID local registrado. Para evitar duplicação, não enviaremos novamente.")
+        published = {"id": draft.get("published_media_id")}
+    else:
+        published = instagram_publish_container(connection, container_id)
+    media_id = published.get("id")
+    now = datetime.now().isoformat(timespec="seconds")
+    draft.update({
+        "published_at": now,
+        "status": "PUBLICADO NO INSTAGRAM",
+        "published_media_id": media_id,
+        "publish_response": published,
+    })
+    save_publication_draft(draft)
+    record = {
+        "published_at": now,
+        "status": "PUBLICADO",
+        "platform": "instagram",
+        "media_id": media_id or "",
+        "container_id": container_id,
+        "username": connection.get("username", ""),
+        "post_index": post_index,
+        "approved_at": post.get("approved_at", ""),
+        "publication_key": publication_key(post),
+        "vehicle": post.get("vehicle", ""),
+        "service": post.get("service", ""),
+    }
+    post["instagram_publication"] = record
+    audit = load_publication_audit()
+    duplicate = any(
+        str(item.get("approved_at", "")).strip() == publication_key(post)
+        and str(item.get("username", "")).strip() == str(connection.get("username", "")).strip()
+        and str(item.get("status", "")).upper() == "PUBLICADO"
+        for item in audit
+    )
+    if not duplicate:
+        audit.insert(0, record)
+    save_publication_audit(audit)
+    save_history(history)
+    return record
+
 
 
 
@@ -1291,6 +1627,134 @@ def instagram_disconnect():
     return redirect(url_for("instagram_central", disconnected="1"))
 
 
+
+
+@app.route("/auth/facebook")
+def facebook_login():
+    cfg = facebook_config()
+    if not facebook_meta_ready():
+        return redirect(url_for("instagram_central", facebook_error="Configure META_APP_ID, META_APP_SECRET, FACEBOOK_LOGIN_CONFIG_ID e FACEBOOK_REDIRECT_URI no ambiente do servidor."))
+    state = secrets.token_urlsafe(24)
+    session["facebook_oauth_state"] = state
+    params = {
+        "client_id": cfg["app_id"],
+        "redirect_uri": cfg["redirect_uri"],
+        "response_type": "code",
+        # Login do Facebook para Empresas uses a saved Meta configuration;
+        # the config_id supplies the permission set instead of the scope query.
+        "config_id": cfg["login_config_id"],
+        "override_default_response_type": "true",
+        "state": state,
+    }
+    oauth_url = f"https://www.facebook.com/{cfg['api_version']}/dialog/oauth?{urllib.parse.urlencode(params)}"
+    return redirect(oauth_url)
+
+
+@app.route("/auth/facebook/callback")
+def facebook_callback():
+    oauth_error = request.args.get("error_description") or request.args.get("error")
+    if oauth_error:
+        return redirect(url_for("instagram_central", facebook_error=f"Autorização do Facebook cancelada ou recusada: {_safe_error_message(oauth_error)}"))
+    expected = session.pop("facebook_oauth_state", None)
+    received = request.args.get("state")
+    if not expected or not received or not secrets.compare_digest(expected, received):
+        return redirect(url_for("instagram_central", facebook_error="O estado da autorização do Facebook não confere. Tente conectar novamente."))
+    code = request.args.get("code", "").strip()
+    if not code:
+        return redirect(url_for("instagram_central", facebook_error="A Meta não retornou o código de autorização do Facebook."))
+    cfg = facebook_config()
+    try:
+        if not facebook_meta_ready():
+            raise RuntimeError("Configuração Meta incompleta no ambiente.")
+        token_params = urllib.parse.urlencode({
+            "client_id": cfg["app_id"],
+            "client_secret": cfg["app_secret"],
+            "redirect_uri": cfg["redirect_uri"],
+            "code": code,
+        })
+        token_url = f"https://graph.facebook.com/{cfg['api_version']}/oauth/access_token?{token_params}"
+        short_result = _http_json_request(token_url, timeout=30, api_label="Facebook OAuth")
+        user_token = short_result.get("access_token", "")
+        if not user_token:
+            raise RuntimeError("A Meta não retornou token de usuário para o Facebook.")
+        # This Login for Business configuration is explicitly set to issue a
+        # system-user access token. Do not exchange it as if it were a standard
+        # short-lived user token; Meta may reject fb_exchange_token for this flow.
+        # Use the token returned by the authorization-code exchange to enumerate
+        # the Page grant, then store the Page access token returned by /me/accounts.
+        long_result = {"expires_in": short_result.get("expires_in")}
+        pages_result = facebook_graph_request(
+            "me/accounts", user_token,
+            params={"fields": "id,name,access_token,tasks", "limit": 100},
+            timeout=45,
+        )
+        pages = pages_result.get("data") or []
+        if not pages:
+            raise RuntimeError("A Meta não retornou Páginas para essa conta. Verifique o acesso à Página e tente conectar novamente.")
+        configured_page_id = cfg.get("page_id", "")
+        if configured_page_id:
+            page = next((item for item in pages if str(item.get("id", "")) == configured_page_id), None)
+            if page is None:
+                raise RuntimeError("A Página definida em FACEBOOK_PAGE_ID não foi retornada pela Meta. Confirme o acesso à Página.")
+        elif len(pages) == 1:
+            page = pages[0]
+        else:
+            raise RuntimeError("Mais de uma Página foi encontrada. Defina FACEBOOK_PAGE_ID no ambiente para selecionar a Página correta.")
+        page_token = page.get("access_token", "")
+        if not page_token:
+            raise RuntimeError("A Meta não retornou token de acesso para a Página selecionada.")
+        tasks = page.get("tasks") or []
+        if tasks and not ({"CREATE_CONTENT", "MANAGE"} & set(tasks)):
+            raise RuntimeError("A conta não tem a tarefa CREATE_CONTENT ou MANAGE nessa Página.")
+        connection = {
+            "connected_at": datetime.now().isoformat(timespec="seconds"),
+            "validated_at": datetime.now().isoformat(timespec="seconds"),
+            "validation_status": "OK",
+            "page_id": str(page.get("id", "")),
+            "page_name": page.get("name", ""),
+            "access_token": page_token,
+            "tasks": tasks,
+            "token_type": "page",
+            "user_token_expires_in": long_result.get("expires_in"),
+        }
+        save_facebook_connection(connection)
+        return redirect(url_for("instagram_central", facebook_connected="1"))
+    except Exception as exc:
+        return redirect(url_for("instagram_central", facebook_error=f"Falha ao conectar Facebook: {_safe_error_message(exc)}"))
+
+
+@app.route("/facebook/validate", methods=["POST"])
+def facebook_validate():
+    connection = load_facebook_connection()
+    if not connection.get("access_token") or not connection.get("page_id"):
+        return redirect(url_for("instagram_central", facebook_error="Facebook ainda não está conectado."))
+    try:
+        profile = facebook_graph_request(
+            connection["page_id"], connection["access_token"],
+            params={"fields": "id,name"}, timeout=30
+        )
+        connection.update({
+            "page_id": str(profile.get("id") or connection.get("page_id", "")),
+            "page_name": profile.get("name") or connection.get("page_name", ""),
+            "validated_at": datetime.now().isoformat(timespec="seconds"),
+            "validation_status": "OK",
+            "validation_error": "",
+        })
+        save_facebook_connection(connection)
+        return redirect(url_for("instagram_central", facebook_validated="1"))
+    except Exception as exc:
+        safe = _safe_error_message(exc)
+        connection.update({"validation_status": "ERRO", "validation_error": safe})
+        save_facebook_connection(connection)
+        return redirect(url_for("instagram_central", facebook_error=f"Falha ao validar Facebook: {safe}"))
+
+
+@app.route("/facebook/disconnect", methods=["POST"])
+def facebook_disconnect():
+    save_facebook_connection({})
+    return redirect(url_for("instagram_central", facebook_disconnected="1"))
+
+
 @app.route("/instagram/validate", methods=["POST"])
 def instagram_validate():
     connection = load_instagram_connection()
@@ -1387,87 +1851,90 @@ def instagram_test_media():
 
 @app.route("/instagram/publish", methods=["POST"])
 def instagram_publish():
-    history = reconcile_publication_records(enrich_history(load_history()))
-    connection = load_instagram_connection()
-    audit = load_publication_audit()
-    draft = load_publication_draft()
     try:
-        post_index = int(request.form.get("post_index", draft.get("post_index", "0")))
+        post_index = int(request.form.get("post_index", "0"))
     except (TypeError, ValueError):
         post_index = 0
-
     if request.form.get("confirm") != "yes":
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="PublicaÃ§Ã£o cancelada: confirmaÃ§Ã£o nÃ£o recebida."))
-    if not connection.get("access_token") or not connection.get("username"):
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="Instagram nÃ£o estÃ¡ conectado."))
-    if not (0 <= post_index < len(history)):
-        return redirect(url_for("instagram_central", oauth_error="Post aprovado nÃ£o encontrado."))
-
-    post = history[post_index]
-    prior = find_publication_record(post, audit, connection.get("username", ""))
-    if prior:
-        return redirect(url_for("instagram_central", post=post_index, published="1", oauth_error="PublicaÃ§Ã£o duplicada bloqueada: este post jÃ¡ consta como publicado."))
-    if not draft_matches_post(draft, post, post_index, connection):
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="O rascunho nÃ£o corresponde ao post aprovado atual. Prepare a mÃ­dia novamente."))
-
-    container_id = (draft.get("container_id") or "").strip()
-    if not container_id:
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="Prepare e teste a mÃ­dia no Instagram antes de publicar."))
-
+        return redirect(url_for("instagram_central", post=post_index, oauth_error="Publicação cancelada: confirmação não recebida."))
     try:
-        status = instagram_container_status(connection, container_id)
-        status_code = (status.get("status_code") or "").upper()
-        if status_code not in {"FINISHED", "PUBLISHED"}:
-            try:
-                status = _wait_for_container(connection, container_id, timeout=90)
-                status_code = (status.get("status_code") or "").upper()
-            except Exception as wait_exc:
-                return redirect(url_for("instagram_central", post=post_index, oauth_error=f"O Instagram ainda está processando a mídia: {wait_exc}"))
-        if status_code and status_code not in {"FINISHED", "PUBLISHED"}:
-            return redirect(url_for("instagram_central", post=post_index, oauth_error=f"O Instagram ainda não liberou o container para publicação: {status_code}."))
-        if status_code == "PUBLISHED" and draft.get("published_media_id"):
-            return redirect(url_for("instagram_central", post=post_index, published="1"))
-
-        published = instagram_publish_container(connection, container_id)
-        media_id = published.get("id")
-        now = datetime.now().isoformat(timespec="seconds")
-        draft.update({
-            "published_at": now,
-            "status": "PUBLICADO NO INSTAGRAM",
-            "published_media_id": media_id,
-            "publish_response": published,
-        })
-        save_publication_draft(draft)
-
-        # Keep the approved history as the source of truth for the workflow.
-        publication_record = {
-            "published_at": now,
-            "status": "PUBLICADO",
-            "media_id": media_id or "",
-            "container_id": container_id,
-            "username": connection.get("username", ""),
-            "post_index": post_index,
-            "approved_at": post.get("approved_at", ""),
-            "publication_key": publication_key(post),
-            "vehicle": post.get("vehicle", ""),
-            "service": post.get("service", ""),
-        }
-        post["instagram_publication"] = publication_record
-        audit = load_publication_audit()
-        duplicate_audit = any(
-            str(item.get("approved_at", "")).strip() == publication_key(post)
-            and str(item.get("username", "")).strip() == str(connection.get("username", "")).strip()
-            and str(item.get("status", "")).upper() == "PUBLICADO"
-            for item in audit
-        )
-        if not duplicate_audit:
-            audit.insert(0, publication_record)
-        save_publication_audit(audit)
-        save_history(history)
+        publish_instagram_for_post(post_index)
         return redirect(url_for("instagram_central", post=post_index, published="1"))
     except Exception as exc:
-        return redirect(url_for("instagram_central", post=post_index, oauth_error=f"Falha na publicaÃ§Ã£o: {exc}"))
+        safe = _safe_error_message(exc)
+        try:
+            history = enrich_history(load_history())
+            if 0 <= post_index < len(history):
+                log_platform_attempt("instagram", history[post_index], "ERRO", safe)
+        except Exception:
+            pass
+        return redirect(url_for("instagram_central", post=post_index, oauth_error=f"Falha na publicação no Instagram: {safe[:350]}"))
 
+
+@app.route("/publicar-plataformas", methods=["POST"])
+def publish_selected_platforms():
+    try:
+        post_index = int(request.form.get("post_index", "0"))
+    except (TypeError, ValueError):
+        post_index = 0
+    if request.form.get("confirm") != "yes":
+        return redirect(url_for("instagram_central", post=post_index, oauth_error="Publicação cancelada: confirmação não recebida."))
+    selected = {value for value in request.form.getlist("platforms") if value in {"instagram", "facebook"}}
+    if not selected:
+        return redirect(url_for("instagram_central", post=post_index, oauth_error="Selecione pelo menos uma plataforma para publicar."))
+
+    post = {}
+    try:
+        history = reconcile_publication_records(enrich_history(load_history()))
+        if not (0 <= post_index < len(history)):
+            raise RuntimeError("Post aprovado não encontrado.")
+        post = history[post_index]
+        if "instagram" in selected:
+            preflight_instagram_for_post(post_index)
+        if "facebook" in selected:
+            fb_connection = load_facebook_connection()
+            fb_audit = load_facebook_publication_audit()
+            if not fb_connection.get("access_token") or not fb_connection.get("page_id"):
+                raise RuntimeError("Conecte a Página do Facebook antes de publicar.")
+            if find_facebook_publication_record(post, fb_audit, fb_connection.get("page_id", "")):
+                raise RuntimeError("Este post já foi publicado no Facebook. A duplicação foi bloqueada.")
+            facebook_media_urls(post)
+    except Exception as exc:
+        message = _safe_error_message(exc)[:350]
+        for platform in sorted(selected):
+            try:
+                log_platform_attempt(platform, post or {"approved_at": "", "vehicle": "", "service": ""}, "BLOQUEADO", message)
+            except Exception:
+                pass
+        session["last_platform_results"] = [
+            {"platform": platform, "status": "BLOQUEADO", "message": message}
+            for platform in sorted(selected)
+        ]
+        return redirect(url_for("instagram_central", post=post_index, platforms_result="1"))
+
+    results = []
+    for platform in ("instagram", "facebook"):
+        if platform not in selected:
+            continue
+        try:
+            if platform == "instagram":
+                record = publish_instagram_for_post(post_index)
+                label, target_id = "Instagram", record.get("media_id", "")
+            else:
+                record = publish_facebook_for_post(post_index)
+                label, target_id = "Facebook", record.get("post_id", "")
+            results.append({"platform": platform, "status": "PUBLICADO", "message": f"{label} publicado. ID: {target_id}"})
+        except Exception as exc:
+            message = _safe_error_message(exc)[:350]
+            try:
+                latest_history = enrich_history(load_history())
+                latest_post = latest_history[post_index] if 0 <= post_index < len(latest_history) else post
+                log_platform_attempt(platform, latest_post, "ERRO", message)
+            except Exception:
+                pass
+            results.append({"platform": platform, "status": "ERRO", "message": message})
+    session["last_platform_results"] = results
+    return redirect(url_for("instagram_central", post=post_index, platforms_result="1"))
 
 @app.route("/fila-publicacoes", methods=["GET"])
 def publication_queue():
@@ -1575,6 +2042,11 @@ def instagram_central():
     connection = load_instagram_connection()
     draft = load_publication_draft()
     publication = find_publication_record(post, audit, connection.get("username", "")) if post else {}
+    facebook_connection = load_facebook_connection()
+    facebook_audit = load_facebook_publication_audit()
+    facebook_publication = find_facebook_publication_record(post, facebook_audit, facebook_connection.get("page_id", "")) if post else {}
+    draft_matches_selected = bool(post and draft_matches_post(draft, post, post_index, connection))
+    platform_results = session.pop("last_platform_results", []) if request.args.get("platforms_result") == "1" else []
     return render_template(
         "instagram.html",
         history=history,
@@ -1584,6 +2056,12 @@ def instagram_central():
         already_published=bool(publication),
         connection=connection,
         draft=draft,
+        draft_matches_selected=draft_matches_selected,
+        facebook_connection=facebook_connection,
+        facebook_ready=facebook_meta_ready(),
+        facebook_publication=facebook_publication,
+        facebook_already_published=bool(facebook_publication),
+        platform_results=platform_results,
         meta_ready=meta_ready(),
         oauth_error=request.args.get("oauth_error"),
         setup_missing=request.args.get("setup") == "missing",
@@ -1593,6 +2071,10 @@ def instagram_central():
         media_tested=request.args.get("media_tested") == "1",
         published=request.args.get("published") == "1",
         disconnected=request.args.get("disconnected") == "1",
+        facebook_connected=request.args.get("facebook_connected") == "1",
+        facebook_validated=request.args.get("facebook_validated") == "1",
+        facebook_disconnected=request.args.get("facebook_disconnected") == "1",
+        facebook_error=request.args.get("facebook_error"),
     )
 
 
