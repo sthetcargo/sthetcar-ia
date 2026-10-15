@@ -169,7 +169,7 @@ def _looks_like_caption(text: str):
         "resumo da transformação", "o que aparece no antes", "o que aparece no depois",
         "confiança:", "alertas", "explanation of service", "benefits:",
         "quebradas que encobriam refletores", "- benefits", "- explanation of service",
-        "legenda:", "hashtags:", "[legenda completa]",
+        "legenda:", "[legenda completa]",
     ]
     if any(marker in low for marker in bad_markers):
         return False
