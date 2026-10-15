@@ -83,7 +83,7 @@ assert "publish_facebook_for_post(" not in prepare_source
 assert "publish_instagram_for_post(" not in prepare_source
 
 confirm_source = ast.get_source_segment(source, function_nodes["confirm_platform_publication"])
-for marker in ('request.form.get("confirmation_id"', 'secrets.compare_digest', 'request.form.get("acknowledge")', 'request.form.get("action")'):
+for marker in ('request.form.get("confirmation_id"', 'secrets.compare_digest', 'request.form.get("acknowledge")', 'request.form.get("action",')):
     assert marker in confirm_source, f"Confirmation route missing guard: {marker}"
 assert "_preflight_selected_platforms(post_index, selected)" in confirm_source
 assert 'session.pop("pending_platform_publication", None)' in confirm_source
