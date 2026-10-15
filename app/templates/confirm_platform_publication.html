@@ -20,7 +20,7 @@ p{line-height:1.5}
 .tag{display:inline-block;background:#e9f8ef;border:1px solid #b9e6c8;color:#166534;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:800}
 .box{background:#fafbfc;border:1px solid #e4e6ea;border-radius:12px;padding:14px;white-space:pre-wrap;line-height:1.55;overflow-wrap:anywhere}
 .photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.photos img{display:block;width:100%;max-height:300px;object-fit:contain;background:#111;border-radius:10px}
+.photos img,.photos video{display:block;width:100%;max-height:300px;object-fit:contain;background:#111;border-radius:10px}
 .photo-label{font-size:12px;font-weight:800;color:#66707d;margin:0 0 7px}
 .ack{display:flex;gap:12px;align-items:flex-start;margin:18px 0;padding:15px;border:1px solid #d9dde4;border-radius:12px;background:#fafbfc;line-height:1.45}
 .ack input{margin-top:4px;transform:scale(1.2)}
@@ -48,18 +48,25 @@ button:disabled{opacity:.65;cursor:wait}
       <div>
         <p class="photo-label">ANTES</p>
         {% for image_ref in post.before_images or ([post.before_image] if post.before_image else []) %}
-          {% if image_ref and not (image_ref|is_video_media) %}<img src="{{ image_ref|media_url }}" alt="Foto antes">{% endif %}
+          {% if image_ref %}{% if image_ref|is_video_media %}<video src="{{ image_ref|media_url }}" controls muted playsinline></video>{% else %}<img src="{{ image_ref|media_url }}" alt="Foto antes">{% endif %}{% endif %}
         {% endfor %}
       </div>
       <div>
         <p class="photo-label">DEPOIS</p>
         {% for image_ref in post.after_images or ([post.after_image] if post.after_image else []) %}
-          {% if image_ref and not (image_ref|is_video_media) %}<img src="{{ image_ref|media_url }}" alt="Foto depois">{% endif %}
+          {% if image_ref %}{% if image_ref|is_video_media %}<video src="{{ image_ref|media_url }}" controls muted playsinline></video>{% else %}<img src="{{ image_ref|media_url }}" alt="Foto depois">{% endif %}{% endif %}
         {% endfor %}
       </div>
     </div>
-    <h2 style="margin-top:20px">Legenda e hashtags</h2>
-    <div class="box">{{ caption_preview }}</div>
+    <h2 style="margin-top:20px">Texto exato por plataforma</h2>
+    {% if 'instagram' in selected_platforms %}
+      <h3>Instagram · @{{ connection.username }}</h3>
+      <div class="box">{{ instagram_caption_preview }}</div>
+    {% endif %}
+    {% if 'facebook' in selected_platforms %}
+      <h3>Facebook · {{ facebook_connection.page_name or facebook_connection.page_id }}</h3>
+      <div class="box">{{ facebook_caption_preview }}</div>
+    {% endif %}
   </section>
 
   <section class="card">
