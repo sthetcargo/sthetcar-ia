@@ -1,6 +1,6 @@
 # Facebook Page publishing — setup V33.2.21
 
-This change is isolated to branch `feat/facebook-page-publishing-v33-2-21`. It has **not** been merged into `main` or deployed to Render.
+This change has been merged into `main` by PR #1. Render may deploy automatically when connected to `main`; the actual deployment status must be confirmed in the Render dashboard before testing.
 
 ## Render variables
 
@@ -8,7 +8,7 @@ In the Render service `sthetcar-ia`, preserve existing environment values and ad
 
 - `FACEBOOK_REDIRECT_URI=https://sthetcar-ia.onrender.com/auth/facebook/callback`
 - `FACEBOOK_PAGE_ID=110352814889450`
-- `FACEBOOK_LOGIN_CONFIG_ID=<ID da configuração Login do Facebook para Empresas>`
+- `FACEBOOK_LOGIN_CONFIG_ID=1807068463657763`
 - `PUBLIC_BASE_URL=https://sthetcar-ia.onrender.com`
 
 The code reuses `META_APP_ID`, `META_APP_SECRET`, and `META_GRAPH_VERSION` from the existing Meta app. Do not paste access tokens into Render or into this repository.
@@ -21,14 +21,13 @@ In Meta Developers for app “Sthetcar IA”:
 
    `https://sthetcar-ia.onrender.com/auth/facebook/callback`
 
-2. Open **Login do Facebook para Empresas → Configurações** (the configuration wizard/manage configurations area) and create a Login for Business configuration. Select only the intended Sthetcar Page as an asset and include the required Page permissions: `pages_show_list`, `pages_read_engagement`, and `pages_manage_posts`.
-3. Copy the configuration ID shown by Meta and set it in Render as `FACEBOOK_LOGIN_CONFIG_ID`.
+2. The configuration **Sthetcar IA - Página Facebook** has been created with ID `1807068463657763`, token type **system-user access token** with 60-day expiration, the Pages asset class marked as required, and permissions `pages_show_list`, `pages_read_engagement`, and `pages_manage_posts`.
 
-The app's OAuth request uses the Business Login `config_id`; it does not pass a `scope` query parameter. Keep the existing Instagram OAuth redirect URI and settings unchanged. Do not merge or deploy until the configuration ID is available and reviewed.
+The app's OAuth request uses this Business Login `config_id`; it does not pass a `scope` query parameter. Keep the existing Instagram OAuth redirect URI and settings unchanged.
 
 ## Safe validation sequence after review and deployment
 
-1. Confirm the deployment is the expected branch/commit before using it. Do not merge into `main` or deploy until code review and tests are complete.
+1. In Render, confirm the deployment from the merged `main` commit is **Live** before using it. The merge itself does not prove the Render deployment succeeded.
 2. Sign in to Sthetcar IA and open the Instagram + Facebook publication center.
 3. Click **Conectar Página do Facebook**. Complete Meta authorization in the same browser session.
 4. Verify the page name and click **Validar conexão Facebook**.
@@ -44,4 +43,4 @@ The new Supabase state keys `facebook_connection` and `facebook_publication_audi
 
 ## Current validation boundary
 
-The branch has been created for review only. Meta OAuth and any real Facebook/Instagram publication must be tested against the Render environment before this change is considered production-ready. Do not make a real post during code review.
+The Python syntax/template GitHub Actions check passed before merge. That is a static check only: it does not verify Meta OAuth, Render environment variables, Supabase runtime behavior, or actual publishing. Confirm Render is Live, add the required variables safely, connect and validate Facebook, then perform a Facebook-only test post before using combined publication.
