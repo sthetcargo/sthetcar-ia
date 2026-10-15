@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime
 import copy
+import difflib
 import json
 import hashlib
 import os
@@ -1507,6 +1508,8 @@ def review_pending(pending_id):
 def _friendly_caption_rewrite_error(exc):
     """Return a user-safe explanation while keeping diagnostic details in server logs."""
     message = str(exc or "").casefold()
+    if "igual ou muito parecida" in message or "suficientemente diferente" in message or "produzir uma legenda" in message:
+        return "A IA não conseguiu criar uma versão suficientemente diferente. A legenda original foi preservada. Escolha outro foco (por exemplo, educativo, benefícios ou comercial) e tente novamente."
     if "gemini_api_key" in message or "api key" in message and "not configured" in message:
         return "A chave da IA não está configurada no servidor. A legenda atual e as fotos foram preservadas."
     if any(code in message for code in ("503", "unavailable", "429", "resource_exhausted", "rate limit", "temporariamente indisponível")):
@@ -1562,6 +1565,23 @@ def rewrite_pending_caption(pending_id):
         caption, hashtags = split_post(generated, vehicle, service)
         if not caption.strip():
             raise RuntimeError("A IA não retornou uma nova legenda. Tente novamente em alguns instantes.")
+
+        # Defensive guard at the route boundary: never report success if the
+        # generated caption is effectively the same as the one the user saw.
+        def _normalize_caption_for_compare(value):
+            return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+        old_normalized = _normalize_caption_for_compare(current_caption)
+        new_normalized = _normalize_caption_for_compare(caption)
+        if old_normalized and new_normalized:
+            similarity = difflib.SequenceMatcher(None, old_normalized, new_normalized).ratio()
+            old_opening = re.split(r"(?<=[.!?])\s+", old_normalized, maxsplit=1)[0]
+            new_opening = re.split(r"(?<=[.!?])\s+", new_normalized, maxsplit=1)[0]
+            if similarity >= 0.88 or (old_opening and old_opening == new_opening):
+                raise RuntimeError(
+                    "A IA devolveu uma legenda igual ou muito parecida com a atual. "
+                    "O texto original foi preservado; escolha outro foco e tente novamente."
+                )
 
         pending["vehicle"] = vehicle
         pending["service"] = service
