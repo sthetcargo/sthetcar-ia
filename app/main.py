@@ -926,7 +926,7 @@ def instagram_media_urls(post):
     return [item["url"] for item in instagram_media_items(post)]
 
 
-def _wait_for_container(connection, container_id, timeout=90):
+def _wait_for_container(connection, container_id, timeout=120):
     started = datetime.now().timestamp()
     last = {}
     while datetime.now().timestamp() - started < timeout:
@@ -938,7 +938,11 @@ def _wait_for_container(connection, container_id, timeout=90):
             raise RuntimeError(f"Instagram não conseguiu processar a mídia: {status} {last.get('status', '')}".strip())
         import time
         time.sleep(4)
-    return last
+    status = (last.get("status_code") or "status desconhecido").upper()
+    raise RuntimeError(
+        f"O Instagram ainda está processando a mídia ({status}) após {timeout} segundos. "
+        "O rascunho foi preservado; tente preparar e testar novamente em alguns instantes."
+    )
 
 
 def instagram_create_container(connection, media_items, caption):
@@ -977,8 +981,9 @@ def instagram_create_container(connection, media_items, caption):
         child_id = child.get("id")
         if not child_id:
             raise RuntimeError(f"Instagram não retornou o ID do item do carrossel: {child}")
-        if item["media_type"] == "VIDEO":
-            _wait_for_container(connection, child_id, timeout=90)
+        # Carousel children must finish processing before the parent is created.
+        # This applies to images as well as videos.
+        _wait_for_container(connection, child_id, timeout=120)
         children.append(child_id)
 
     carousel = _http_json_request(
