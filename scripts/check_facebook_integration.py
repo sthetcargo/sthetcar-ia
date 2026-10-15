@@ -164,7 +164,7 @@ function_nodes = {
 }
 wait_source = ast.get_source_segment(source, function_nodes["_wait_for_container"])
 assert 'status in {"FINISHED", "PUBLISHED"}' in wait_source
-assert "raise RuntimeError(" in wait_source and "after {timeout} seconds" in wait_source
+assert "raise RuntimeError(" in wait_source and "timeout" in wait_source and "O Instagram ainda está processando a mídia" in wait_source
 assert "return last" not in wait_source, "Timed-out containers must not be treated as a successful media test"
 
 container_source = ast.get_source_segment(source, function_nodes["instagram_create_container"])
