@@ -1913,7 +1913,7 @@ def instagram_test_media():
         container_id = container.get("id")
         if not container_id:
             raise RuntimeError(f"Instagram nÃ£o retornou o ID do container: {container}")
-        status = _wait_for_container(connection, container_id, timeout=90) if any(item["media_type"] == "VIDEO" for item in media_items) else instagram_container_status(connection, container_id)
+        status = _wait_for_container(connection, container_id, timeout=120)
         draft.update({
             "media_tested_at": datetime.now().isoformat(timespec="seconds"),
             "container_id": container_id,
