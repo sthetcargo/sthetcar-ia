@@ -2003,6 +2003,7 @@ def confirm_platform_publication():
             connection=load_instagram_connection(),
             facebook_connection=load_facebook_connection(),
             confirmation_minutes=PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS // 60,
+            confirmation_error=None,
         )
 
     pending = session.get("pending_platform_publication")
@@ -2030,6 +2031,25 @@ def confirm_platform_publication():
             post=pending.get("post_index", 0),
             oauth_error="Ação de confirmação inválida. Nenhuma plataforma foi publicada.",
         ))
+
+    # Enforce explicit acknowledgement on the server; browser-required is only a convenience.
+    if request.form.get("acknowledge") != "yes":
+        pending, post, error = _load_pending_publication_confirmation()
+        if error:
+            return redirect(url_for("instagram_central", oauth_error=error))
+        return render_template(
+            "confirm_platform_publication.html",
+            pending=pending,
+            post=post,
+            post_index=int(pending["post_index"]),
+            selected_platforms=pending["platforms"],
+            confirmation_id=pending["id"],
+            caption_preview=build_full_caption(post),
+            connection=load_instagram_connection(),
+            facebook_connection=load_facebook_connection(),
+            confirmation_minutes=PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS // 60,
+            confirmation_error="Marque a caixa de autorização para confirmar. Nenhuma publicação foi feita.",
+        )
 
     pending, post, error = _load_pending_publication_confirmation()
     if error:
