@@ -34,6 +34,8 @@ required_functions = {
     "preflight_instagram_for_post",
     "find_facebook_publication_record",
     "load_facebook_publication_audit",
+    "rewrite_pending_caption",
+    "_friendly_caption_rewrite_error",
 }
 missing = required_functions - function_names
 assert not missing, f"Missing required functions: {sorted(missing)}"
@@ -57,6 +59,7 @@ required_routes = {
     "/facebook/disconnect",
     "/publicar-plataformas",
     "/publicar-plataformas/confirmar",
+    "/revisar/<pending_id>/reescrever",
 }
 missing_routes = required_routes - routes
 assert not missing_routes, f"Missing required routes: {sorted(missing_routes)}"
@@ -93,6 +96,28 @@ for marker in ('request.form.get("confirmation_id"', 'secrets.compare_digest', '
 assert "_preflight_selected_platforms(post_index, selected)" in confirm_source
 assert 'session.pop("pending_platform_publication", None)' in confirm_source
 
+# Caption rewrite must guard queue/form normalization and never erase the original caption on failure.
+rewrite_source = ast.get_source_segment(source, function_nodes["rewrite_pending_caption"])
+try_pos = rewrite_source.find("try:")
+assert try_pos >= 0, "Caption rewrite route must guard potentially failing operations"
+assert rewrite_source.find("queue = load_approval_queue()") < try_pos, "Queue access should be enclosed in the rewrite exception guard"
+assert "str(request.form.get(\"current_caption\") or pending.get(\"caption\") or \"\").strip()" in rewrite_source
+assert "app.logger.exception(\"Falha ao reescrever legenda;" in rewrite_source
+assert "_friendly_caption_rewrite_error(exc)" in rewrite_source
+assert "original_pending = copy.deepcopy(pending)" in rewrite_source
+assert 'render_template("rewrite_error.html"' in rewrite_source
+
+# Parse the review and safe error templates, too.
+review_template_path = root / "app" / "templates" / "review_pending.html"
+review_template = review_template_path.read_text(encoding="utf-8")
+Environment().parse(review_template)
+rewrite_error_path = root / "app" / "templates" / "rewrite_error.html"
+rewrite_error_template = rewrite_error_path.read_text(encoding="utf-8")
+Environment().parse(rewrite_error_template)
+assert "rewrite_error or request.args.get(\"rewrite_error\")" in review_template
+assert "A legenda e as fotos do post não foram alteradas" in rewrite_error_template
+
+
 # Parse both Jinja templates without executing actions or making API calls.
 template = template_path.read_text(encoding="utf-8")
 Environment().parse(template)
@@ -108,4 +133,4 @@ assert 'url_for(\'instagram_publish\') }}" onsubmit=' not in template, "Instagra
 assert 'name="confirm" value="yes"' not in template, "Do not trust hidden confirmation flags"
 assert 'name="access_token"' not in template + confirm_template, "Templates must never render an access-token form field"
 
-print("PASS: Python AST, Facebook routes, two-step publication confirmation guards, and both Jinja templates.")
+print("PASS: Python AST, Facebook routes, publication confirmation guards, caption rewrite error handling, and all relevant Jinja templates.")
