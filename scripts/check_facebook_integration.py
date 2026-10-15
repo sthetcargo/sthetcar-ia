@@ -36,6 +36,9 @@ required_functions = {
     "load_facebook_publication_audit",
     "rewrite_pending_caption",
     "_friendly_caption_rewrite_error",
+    "_wait_for_container",
+    "instagram_create_container",
+    "instagram_test_media",
 }
 missing = required_functions - function_names
 assert not missing, f"Missing required functions: {sorted(missing)}"
@@ -154,4 +157,22 @@ assert 'url_for(\'instagram_publish\') }}" onsubmit=' not in template, "Instagra
 assert 'name="confirm" value="yes"' not in template, "Do not trust hidden confirmation flags"
 assert 'name="access_token"' not in template + confirm_template, "Templates must never render an access-token form field"
 
-print("PASS: Python AST, Facebook routes, publication confirmation guards, real caption-change guards, rewrite error handling, and relevant Jinja templates.")
+# Instagram media readiness: poll photo/video/carousel processing and reuse a pending container.
+function_nodes = {
+    node.name: node for node in ast.walk(tree)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+}
+wait_source = ast.get_source_segment(source, function_nodes["_wait_for_container"])
+assert 'status in {"FINISHED", "PUBLISHED"}' in wait_source
+assert "raise RuntimeError(" in wait_source and "timeout" in wait_source and "O Instagram ainda está processando a mídia" in wait_source
+assert not wait_source.rstrip().endswith("return last"), "Timed-out containers must not be treated as a successful media test"
+
+container_source = ast.get_source_segment(source, function_nodes["instagram_create_container"])
+assert '_wait_for_container(connection, child_id, timeout=120)' in container_source, "Carousel children must finish processing, including photos"
+
+test_media_source = ast.get_source_segment(source, function_nodes["instagram_test_media"])
+assert 'status = _wait_for_container(connection, container_id, timeout=120)' in test_media_source, "The test-media route must poll image containers too"
+assert 'existing_container_id' in test_media_source and 'existing_status not in {"ERROR", "EXPIRED"}' in test_media_source, "Retry must reuse an in-progress container"
+assert test_media_source.find("save_publication_draft(draft)") < test_media_source.find("_wait_for_container(connection, container_id"), "Save container ID before polling so a retry can resume"
+
+print("PASS: Python AST, Facebook routes, publication confirmation guards, Instagram media polling/retry, caption rewrite safeguards, and relevant Jinja templates.")

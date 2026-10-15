@@ -926,7 +926,7 @@ def instagram_media_urls(post):
     return [item["url"] for item in instagram_media_items(post)]
 
 
-def _wait_for_container(connection, container_id, timeout=90):
+def _wait_for_container(connection, container_id, timeout=120):
     started = datetime.now().timestamp()
     last = {}
     while datetime.now().timestamp() - started < timeout:
@@ -938,7 +938,11 @@ def _wait_for_container(connection, container_id, timeout=90):
             raise RuntimeError(f"Instagram não conseguiu processar a mídia: {status} {last.get('status', '')}".strip())
         import time
         time.sleep(4)
-    return last
+    status = (last.get("status_code") or "status desconhecido").upper()
+    raise RuntimeError(
+        f"O Instagram ainda está processando a mídia ({status}) após {timeout} segundos. "
+        "O rascunho foi preservado; tente preparar e testar novamente em alguns instantes."
+    )
 
 
 def instagram_create_container(connection, media_items, caption):
@@ -977,8 +981,9 @@ def instagram_create_container(connection, media_items, caption):
         child_id = child.get("id")
         if not child_id:
             raise RuntimeError(f"Instagram não retornou o ID do item do carrossel: {child}")
-        if item["media_type"] == "VIDEO":
-            _wait_for_container(connection, child_id, timeout=90)
+        # Carousel children must finish processing before the parent is created.
+        # This applies to images as well as videos.
+        _wait_for_container(connection, child_id, timeout=120)
         children.append(child_id)
 
     carousel = _http_json_request(
@@ -1900,15 +1905,33 @@ def instagram_test_media():
         if prior:
             return redirect(url_for("instagram_central", post=post_index, published="1", oauth_error="Este post jÃ¡ foi publicado no Instagram. O teste de mÃ­dia foi bloqueado para evitar duplicaÃ§Ã£o."))
         draft = load_publication_draft()
-        if not draft_matches_post(draft, post, post_index, connection):
+        draft_matches = draft_matches_post(draft, post, post_index, connection)
+        if not draft_matches:
             draft = build_publication_draft(post, post_index, connection)
 
         media_items = instagram_media_items(post)
-        container = instagram_create_container(connection, media_items, draft["full_caption"])
-        container_id = container.get("id")
-        if not container_id:
-            raise RuntimeError(f"Instagram nÃ£o retornou o ID do container: {container}")
-        status = _wait_for_container(connection, container_id, timeout=90) if any(item["media_type"] == "VIDEO" for item in media_items) else instagram_container_status(connection, container_id)
+        existing_container_id = str(draft.get("container_id") or "").strip()
+        existing_status = str((draft.get("container_status") or {}).get("status_code") or "").upper()
+        if draft_matches and existing_container_id and existing_status not in {"ERROR", "EXPIRED"}:
+            # Resume polling the same container after IN_PROGRESS or a timeout.
+            container_id = existing_container_id
+        else:
+            container = instagram_create_container(connection, media_items, draft["full_caption"])
+            container_id = str(container.get("id") or "").strip()
+            if not container_id:
+                raise RuntimeError("Instagram não retornou o ID do container.")
+            draft.update({
+                "container_id": container_id,
+                "container_status": {},
+                "public_media_urls": [item["url"] for item in media_items],
+                "media_types": [item["media_type"] for item in media_items],
+                "status": "MÍDIA EM PROCESSAMENTO NO INSTAGRAM — ainda não publicada",
+                "note": "Container criado; aguardando o Instagram concluir o processamento.",
+            })
+            # Save the container before polling so retry can reuse it.
+            save_publication_draft(draft)
+
+        status = _wait_for_container(connection, container_id, timeout=120)
         draft.update({
             "media_tested_at": datetime.now().isoformat(timespec="seconds"),
             "container_id": container_id,
