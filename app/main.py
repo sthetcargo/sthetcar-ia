@@ -1,5 +1,7 @@
 from pathlib import Path
 from datetime import datetime
+import copy
+import difflib
 import json
 import hashlib
 import os
@@ -1503,34 +1505,84 @@ def review_pending(pending_id):
     return render_template("review_pending.html", result=pending, pending=pending, history=enrich_history(load_history()), approval_queue=queue)
 
 
+def _friendly_caption_rewrite_error(exc):
+    """Return a user-safe explanation while keeping diagnostic details in server logs."""
+    message = str(exc or "").casefold()
+    if "igual ou muito parecida" in message or "suficientemente diferente" in message or "produzir uma legenda" in message:
+        return "A IA não conseguiu criar uma versão suficientemente diferente. A legenda original foi preservada. Escolha outro foco (por exemplo, educativo, benefícios ou comercial) e tente novamente."
+    if "gemini_api_key" in message or "api key" in message and "not configured" in message:
+        return "A chave da IA não está configurada no servidor. A legenda atual e as fotos foram preservadas."
+    if any(code in message for code in ("503", "unavailable", "429", "resource_exhausted", "rate limit", "temporariamente indisponível")):
+        return "A IA está temporariamente indisponível ou atingiu o limite de uso. A legenda atual e as fotos foram preservadas; aguarde alguns minutos e tente novamente."
+    if "análise visual" in message and ("vazia" in message or "não existe" in message):
+        return "Este conteúdo está sem análise visual para orientar a reescrita. A legenda atual e as fotos foram preservadas."
+    return "Não foi possível reescrever a legenda. A legenda atual e as fotos foram preservadas. Verifique os logs do aplicativo antes de tentar novamente."
+
+
 @app.route("/revisar/<pending_id>/reescrever", methods=["POST"])
 def rewrite_pending_caption(pending_id):
-    """Rewrite only the caption/hashtags using the existing approved visual analysis."""
-    queue = load_approval_queue()
-    pending = next((item for item in queue if item.get("pending_id") == pending_id), None)
-    if not pending:
-        return redirect(url_for("dashboard", queue_error="ConteÃºdo pendente nÃ£o encontrado."))
-
-    vehicle = request.form.get("vehicle", pending.get("vehicle", "")).strip()
-    service = request.form.get("service", pending.get("service", "")).strip()
-    analysis = pending.get("analysis", "").strip()
-    # O texto digitado no editor tem prioridade sobre o valor salvo na fila.
-    current_caption = request.form.get("current_caption", "").strip() or pending.get("caption", "").strip()
-
+    """Rewrite only caption/hashtags without allowing route setup failures to become HTTP 500 pages."""
+    queue = []
+    pending = None
+    original_pending = None
     try:
+        # All data access and form normalization belongs inside this try block.
+        # This prevents null/missing values from escaping to Flask's generic 500 page.
+        queue = load_approval_queue()
+        pending = next((item for item in queue if item.get("pending_id") == pending_id), None)
+        if not pending:
+            return redirect(url_for("dashboard", queue_error="Conteúdo pendente não encontrado."))
+
+        original_pending = copy.deepcopy(pending)
+        vehicle = str(request.form.get("vehicle") or pending.get("vehicle") or "").strip()
+        service = str(request.form.get("service") or pending.get("service") or "").strip()
+        analysis = str(pending.get("analysis") or "").strip()
+        current_caption = str(request.form.get("current_caption") or pending.get("caption") or "").strip()
         rewrite_count = int(pending.get("rewrite_count", 0) or 0) + 1
-        rewrite_angle = request.form.get("rewrite_angle", "").strip()
-        generated = rewrite_caption(
+        rewrite_angle = str(request.form.get("rewrite_angle") or "").strip()
+
+        allowed_angles = {
+            "problema_cliente",
+            "processo_tecnico",
+            "transformacao_antes_depois",
+            "beneficios",
+            "educativa",
+            "comercial",
+        }
+        if rewrite_angle and rewrite_angle not in allowed_angles:
+            raise RuntimeError("O foco de reescrita selecionado não é válido.")
+        if not analysis:
+            raise RuntimeError("A análise visual deste conteúdo está vazia.")
+
+        generated = str(rewrite_caption(
             analysis,
             vehicle,
             service,
             current_caption,
             rewrite_count=rewrite_count,
             rewrite_angle=rewrite_angle,
-        )
+        ) or "").strip()
         caption, hashtags = split_post(generated, vehicle, service)
         if not caption.strip():
-            raise RuntimeError("A IA nÃ£o retornou uma nova legenda. Tente novamente em alguns instantes.")
+            raise RuntimeError("A IA não retornou uma nova legenda. Tente novamente em alguns instantes.")
+
+        # Defensive guard at the route boundary: never report success if the
+        # generated caption is effectively the same as the one the user saw.
+        def _normalize_caption_for_compare(value):
+            return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+        old_normalized = _normalize_caption_for_compare(current_caption)
+        new_normalized = _normalize_caption_for_compare(caption)
+        if old_normalized and new_normalized:
+            similarity = difflib.SequenceMatcher(None, old_normalized, new_normalized).ratio()
+            old_opening = re.split(r"(?<=[.!?])\s+", old_normalized, maxsplit=1)[0]
+            new_opening = re.split(r"(?<=[.!?])\s+", new_normalized, maxsplit=1)[0]
+            if similarity >= 0.88 or (old_opening and old_opening == new_opening):
+                raise RuntimeError(
+                    "A IA devolveu uma legenda igual ou muito parecida com a atual. "
+                    "O texto original foi preservado; escolha outro foco e tente novamente."
+                )
+
         pending["vehicle"] = vehicle
         pending["service"] = service
         pending["post"] = generated
@@ -1542,8 +1594,29 @@ def rewrite_pending_caption(pending_id):
         save_approval_queue(queue)
         return redirect(url_for("review_pending", pending_id=pending_id, rewritten=1))
     except Exception as exc:
-        return redirect(url_for("review_pending", pending_id=pending_id, rewrite_error=str(exc)))
+        app.logger.exception("Falha ao reescrever legenda; pending_id=%s", pending_id)
+        error_message = _friendly_caption_rewrite_error(exc)
 
+        # If persistence failed after generation, restore the original in-memory
+        # item so the UI never shows a rewrite that was not saved successfully.
+        if pending is not None and original_pending is not None:
+            pending.clear()
+            pending.update(original_pending)
+            return render_template(
+                "review_pending.html",
+                result=pending,
+                pending=pending,
+                history=[],
+                approval_queue=queue if isinstance(queue, list) else [pending],
+                rewrite_error=error_message,
+            ), 200
+
+        # If even loading the queue failed, avoid a raw Flask traceback page.
+        return render_template(
+            "rewrite_error.html",
+            pending_id=pending_id,
+            error=error_message,
+        ), 503
 
 @app.route("/descartar/<pending_id>", methods=["POST"])
 def discard_pending(pending_id):

@@ -338,11 +338,27 @@ seguido de 7-10 hashtags.
 """
     response, _ = _generate(client, emergency, temperature=0.95, max_output_tokens=1400)
     text = _response_text(response)
-    if text and _looks_like_caption(text) and (not source_caption or _caption_similarity(text, source_caption) < 0.78):
-        return text
+    if text and _looks_like_caption(text):
+        similarity = _caption_similarity(text, source_caption)
+        opening_same = _same_opening(text, source_caption)
+        if not source_caption or (similarity < 0.78 and not opening_same):
+            return text
+        if similarity < best_similarity:
+            best, best_similarity = text, similarity
 
-    # Falha real da IA: preserve o texto atual em vez de trocar por um fallback genérico.
-    return source_caption or _fallback_caption(analysis, vehicle, service)
+    # Use the best valid, meaningfully different response from the earlier attempts
+    # rather than silently returning the old caption and reporting a false success.
+    if best and best_similarity < 0.86 and not _same_opening(best, source_caption):
+        return best
+
+    if source_caption:
+        raise RuntimeError(
+            "A IA não conseguiu produzir uma legenda suficientemente diferente da atual. "
+            "A legenda original foi preservada; tente outro foco ou tente novamente."
+        )
+
+    # There is no current caption to preserve, so a factual fallback is appropriate.
+    return _fallback_caption(analysis, vehicle, service)
 
 
 def generate_post(analysis: str, vehicle: str = "",

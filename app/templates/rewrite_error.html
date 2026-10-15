@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sthetcar IA — Reescrita indisponível</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f6f8;color:#20242b;font-family:Arial,sans-serif}
+main{max-width:720px;margin:8vh auto;padding:20px}
+section{background:#fff;border:1px solid #e1e4e8;border-radius:16px;padding:26px;box-shadow:0 8px 26px rgba(0,0,0,.05)}
+h1{font-size:26px;margin:0 0 14px}
+p{line-height:1.55}
+.notice{background:#fff4d8;border:1px solid #edd58d;color:#74530c;border-radius:12px;padding:14px;margin:18px 0}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+a{display:inline-block;text-decoration:none;font-weight:800;padding:12px 16px;border-radius:10px;background:#eef0f3;color:#222}
+@media(max-width:560px){main{padding:12px;margin:3vh auto}section{padding:18px}h1{font-size:22px}.actions{flex-direction:column}a{text-align:center}}
+</style>
+</head>
+<body><main><section>
+<h1>Não foi possível abrir a revisão da legenda</h1>
+<p>A reescrita não foi concluída. A ação não publica conteúdo.</p>
+<div class="notice">{{ error }}</div>
+<p>A legenda e as fotos do post não foram alteradas por esta solicitação. Volte à fila de revisão e tente novamente mais tarde. Se o problema persistir, verifique os logs do serviço no Render.</p>
+<div class="actions"><a href="{{ url_for('dashboard') }}">Voltar à fila de revisão</a><a href="{{ url_for('dashboard') }}">Ir ao painel</a></div>
+</section></main></body></html>
