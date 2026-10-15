@@ -98,7 +98,8 @@ for marker in ('name="platforms"', "facebook_login", "publish_selected_platforms
     assert marker in template, f"Central template missing expected marker: {marker}"
 for marker in ('confirmation_id', 'name="acknowledge"', 'value="publish"', 'value="cancel"'):
     assert marker in confirm_template, f"Confirmation template missing expected marker: {marker}"
-assert 'onsubmit="return confirm(' not in template, "Publication must use a dedicated confirmation page, not a browser confirm dialog"
+assert 'url_for(\'publish_selected_platforms\') }}" onsubmit=' not in template, "Multi-platform publication must use a dedicated confirmation page"
+assert 'url_for(\'instagram_publish\') }}" onsubmit=' not in template, "Instagram publication must use a dedicated confirmation page"
 assert 'name="confirm" value="yes"' not in template, "Do not trust hidden confirmation flags"
 assert 'name="access_token"' not in template + confirm_template, "Templates must never render an access-token form field"
 
