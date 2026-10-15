@@ -96,7 +96,7 @@ confirm_template = confirm_template_path.read_text(encoding="utf-8")
 Environment().parse(confirm_template)
 for marker in ('name="platforms"', "facebook_login", "publish_selected_platforms", "csrf_token"):
     assert marker in template, f"Central template missing expected marker: {marker}"
-for marker in ('confirmation_id', 'name="acknowledge"', 'value="publish"', 'value="cancel"'):
+for marker in ('confirmation_id', 'name="acknowledge"', 'value="publish"', 'value="cancel"', 'instagram_caption_preview', 'facebook_caption_preview'):
     assert marker in confirm_template, f"Confirmation template missing expected marker: {marker}"
 assert 'url_for(\'publish_selected_platforms\') }}" onsubmit=' not in template, "Multi-platform publication must use a dedicated confirmation page"
 assert 'url_for(\'instagram_publish\') }}" onsubmit=' not in template, "Instagram publication must use a dedicated confirmation page"
