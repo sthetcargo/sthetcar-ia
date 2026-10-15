@@ -118,6 +118,12 @@ gemini_functions = {
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
 }
 rewrite_caption_source = ast.get_source_segment(gemini_source, gemini_functions["rewrite_caption"])
+looks_like_caption_source = ast.get_source_segment(
+    gemini_source,
+    {node.name: node for node in ast.walk(gemini_tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}["_looks_like_caption"],
+)
+assert '"hashtags:"' not in looks_like_caption_source.casefold(), "Caption validator must not reject the HASHTAGS section explicitly required by the prompt"
+assert "HASHTAGS:" in rewrite_caption_source, "Rewrite prompt should keep the explicit hashtags output section"
 assert "return source_caption or _fallback_caption" not in rewrite_caption_source, "Rewriter must not report the original caption as a successful rewrite"
 assert "A IA não conseguiu produzir uma legenda suficientemente diferente" in rewrite_caption_source
 
