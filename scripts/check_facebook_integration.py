@@ -9,6 +9,11 @@ main_path = root / "app" / "main.py"
 template_path = root / "app" / "templates" / "instagram.html"
 source = main_path.read_text(encoding="utf-8")
 tree = ast.parse(source, filename=str(main_path))
+assert any(
+    isinstance(node, ast.Import) and any(alias.name == "time" for alias in node.names)
+    for node in tree.body
+), "main.py must import time at module scope for publication confirmation expiry"
+
 
 # Confirm the target routes and helpers exist without importing the app
 # (which would require production environment variables and Supabase).
