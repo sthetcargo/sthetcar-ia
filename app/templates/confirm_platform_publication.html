@@ -79,22 +79,27 @@ button:disabled{opacity:.65;cursor:wait}
     <form method="post" action="{{ url_for('confirm_platform_publication') }}" id="publication-confirmation-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="confirmation_id" value="{{ confirmation_id }}">
+      <input type="hidden" name="action" value="publish">
       <label class="ack">
         <input type="checkbox" name="acknowledge" value="yes" required>
         <span>Confirmo que revisei o veículo, o serviço, as fotos, a legenda e os destinos acima, e autorizo a publicação real somente nas plataformas listadas.</span>
       </label>
       <div class="actions">
-        <button class="publish" type="submit" name="action" value="publish" id="confirm-publish-button">🚀 Confirmar e publicar agora</button>
-        <button class="cancel" type="submit" name="action" value="cancel" formnovalidate>Cancelar, não publicar</button>
+        <button class="publish" type="submit" id="confirm-publish-button">🚀 Confirmar e publicar agora</button>
       </div>
+    </form>
+    <form method="post" action="{{ url_for('confirm_platform_publication') }}" style="margin-top:10px" id="cancel-publication-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirmation_id" value="{{ confirmation_id }}">
+      <input type="hidden" name="action" value="cancel">
+      <button class="cancel" type="submit">Cancelar, não publicar</button>
     </form>
     <p class="muted">O sistema revalida o post, a conexão e o bloqueio de duplicação antes de enviar. Se algo tiver mudado, a publicação será bloqueada.</p>
   </section>
 </main>
 <script>
-document.getElementById("publication-confirmation-form").addEventListener("submit", function (event) {
-  const submitter = event.submitter;
-  if (!submitter || submitter.value !== "publish") return;
+document.getElementById("publication-confirmation-form").addEventListener("submit", function () {
+  const submitter = document.getElementById("confirm-publish-button");
   if (!this.querySelector('input[name="acknowledge"]').checked) return;
   submitter.disabled = true;
   submitter.textContent = "Processando publicação...";
