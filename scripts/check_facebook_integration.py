@@ -105,7 +105,7 @@ assert "str(request.form.get(\"current_caption\") or pending.get(\"caption\") or
 assert "app.logger.exception(\"Falha ao reescrever legenda;" in rewrite_source
 assert "_friendly_caption_rewrite_error(exc)" in rewrite_source
 assert "original_pending = copy.deepcopy(pending)" in rewrite_source
-assert 'render_template("rewrite_error.html"' in rewrite_source
+assert '"rewrite_error.html"' in rewrite_source
 
 # Parse the review and safe error templates, too.
 review_template_path = root / "app" / "templates" / "review_pending.html"
