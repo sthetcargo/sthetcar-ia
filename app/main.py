@@ -1986,25 +1986,35 @@ def publish_selected_platforms():
     return _prepare_publication_confirmation(post_index, selected)
 
 
+def _render_publication_confirmation(pending, post, confirmation_error=None):
+    """Render the exact target captions for the pending platform selection."""
+    selected = pending["platforms"]
+    draft = load_publication_draft() if "instagram" in selected else {}
+    instagram_caption = str(draft.get("full_caption") or "") if "instagram" in selected else ""
+    facebook_caption = build_full_caption(post) if "facebook" in selected else ""
+    return render_template(
+        "confirm_platform_publication.html",
+        pending=pending,
+        post=post,
+        post_index=int(pending["post_index"]),
+        selected_platforms=selected,
+        confirmation_id=pending["id"],
+        instagram_caption_preview=instagram_caption,
+        facebook_caption_preview=facebook_caption,
+        connection=load_instagram_connection(),
+        facebook_connection=load_facebook_connection(),
+        confirmation_minutes=PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS // 60,
+        confirmation_error=confirmation_error,
+    )
+
+
 @app.route("/publicar-plataformas/confirmar", methods=["GET", "POST"])
 def confirm_platform_publication():
     if request.method == "GET":
         pending, post, error = _load_pending_publication_confirmation()
         if error:
             return redirect(url_for("instagram_central", oauth_error=error))
-        return render_template(
-            "confirm_platform_publication.html",
-            pending=pending,
-            post=post,
-            post_index=int(pending["post_index"]),
-            selected_platforms=pending["platforms"],
-            confirmation_id=pending["id"],
-            caption_preview=build_full_caption(post),
-            connection=load_instagram_connection(),
-            facebook_connection=load_facebook_connection(),
-            confirmation_minutes=PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS // 60,
-            confirmation_error=None,
-        )
+        return _render_publication_confirmation(pending, post)
 
     pending = session.get("pending_platform_publication")
     supplied_id = request.form.get("confirmation_id", "")
@@ -2037,17 +2047,9 @@ def confirm_platform_publication():
         pending, post, error = _load_pending_publication_confirmation()
         if error:
             return redirect(url_for("instagram_central", oauth_error=error))
-        return render_template(
-            "confirm_platform_publication.html",
-            pending=pending,
-            post=post,
-            post_index=int(pending["post_index"]),
-            selected_platforms=pending["platforms"],
-            confirmation_id=pending["id"],
-            caption_preview=build_full_caption(post),
-            connection=load_instagram_connection(),
-            facebook_connection=load_facebook_connection(),
-            confirmation_minutes=PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS // 60,
+        return _render_publication_confirmation(
+            pending,
+            post,
             confirmation_error="Marque a caixa de autorização para confirmar. Nenhuma publicação foi feita.",
         )
 
