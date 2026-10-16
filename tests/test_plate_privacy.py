@@ -27,7 +27,7 @@ class PlatePrivacyTests(unittest.TestCase):
     def test_detected_plate_creates_blurred_copy_and_preserves_original(self):
         result = [{
             "index": 1,
-            "plates": [{"x1": 290, "y1": 330, "x2": 710, "y2": 640}],
+            "plates": [{"x1": 290, "y1": 420, "x2": 710, "y2": 640}],
             "needs_review": False,
         }]
         with patch("app.ai.plate_privacy._detect_license_plates", return_value=result):
@@ -36,15 +36,57 @@ class PlatePrivacyTests(unittest.TestCase):
         safe = safe_paths[0]
         self.assertNotEqual(safe, self.original)
         self.assertTrue(safe.is_file())
+        self.assertEqual(safe.suffix.lower(), ".jpg")
         self.assertEqual(self.original.read_bytes(), self.original_bytes)
         self.assertEqual(summary["plate_redaction_version"], 1)
         self.assertEqual(summary["plate_redaction_count"], 1)
         self.assertIn("borradas", summary["plate_redaction_message"])
 
-        with Image.open(self.original) as original_image, Image.open(safe) as safe_image:
-            original_crop = original_image.convert("RGB").crop((65, 35, 175, 80))
-            safe_crop = safe_image.convert("RGB").crop((65, 35, 175, 80))
-            self.assertIsNotNone(ImageChops.difference(original_crop, safe_crop).getbbox())
+        with Image.open(safe) as safe_image:
+            self.assertEqual(safe_image.format, "JPEG")
+            self.assertEqual(safe_image.size, (1080, 1080))
+
+            # The original 2:1 photo is letterboxed rather than cropped; the
+            # detector coordinates are on the resulting square canvas.
+            expected = Image.new("RGB", (1080, 1080), (32, 34, 38))
+            with Image.open(self.original) as original_image:
+                scaled = original_image.convert("RGB").resize((1080, 540), Image.Resampling.LANCZOS)
+                expected.paste(scaled, (0, 270))
+            check_region = (300, 440, 780, 650)
+            safe_crop = safe_image.crop(check_region)
+            expected_crop = expected.crop(check_region)
+            self.assertIsNotNone(ImageChops.difference(safe_crop, expected_crop).getbbox())
+
+    def test_portrait_png_and_panorama_webp_become_square_jpeg_without_cropping(self):
+        portrait = self.root / "portrait.png"
+        panorama = self.root / "panorama.webp"
+        Image.new("RGB", (120, 240), (190, 30, 30)).save(portrait, format="PNG")
+        Image.new("RGB", (480, 120), (30, 190, 30)).save(panorama, format="WEBP")
+        portrait_original = portrait.read_bytes()
+        panorama_original = panorama.read_bytes()
+        result = [
+            {"index": 1, "plates": [], "needs_review": False},
+            {"index": 2, "plates": [], "needs_review": False},
+        ]
+        with patch("app.ai.plate_privacy._detect_license_plates", return_value=result):
+            safe_paths, summary = create_plate_safe_copies([portrait, panorama])
+
+        self.assertEqual([p.suffix.lower() for p in safe_paths], [".jpg", ".jpg"])
+        for safe in safe_paths:
+            with Image.open(safe) as image:
+                self.assertEqual(image.format, "JPEG")
+                self.assertEqual(image.size, (1080, 1080))
+
+        with Image.open(safe_paths[0]) as portrait_result:
+            self.assertEqual(portrait_result.getpixel((0, 0)), (32, 34, 38))
+            self.assertGreater(portrait_result.getpixel((540, 540))[0], 150)
+        with Image.open(safe_paths[1]) as panorama_result:
+            self.assertEqual(panorama_result.getpixel((0, 0)), (32, 34, 38))
+            self.assertGreater(panorama_result.getpixel((540, 540))[1], 150)
+
+        self.assertEqual(portrait.read_bytes(), portrait_original)
+        self.assertEqual(panorama.read_bytes(), panorama_original)
+        self.assertEqual(summary["plate_redaction_image_count"], 2)
 
     def test_no_detected_plate_still_creates_separate_copy(self):
         result = [{"index": 1, "plates": [], "needs_review": False}]
