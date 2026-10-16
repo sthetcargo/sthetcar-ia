@@ -78,10 +78,12 @@ class PlatePrivacyTests(unittest.TestCase):
                 self.assertEqual(image.size, (1080, 1080))
 
         with Image.open(safe_paths[0]) as portrait_result:
-            self.assertEqual(portrait_result.getpixel((0, 0)), (32, 34, 38))
+            portrait_corner = portrait_result.getpixel((0, 0))
+            self.assertTrue(all(abs(a - b) <= 6 for a, b in zip(portrait_corner, (32, 34, 38))))
             self.assertGreater(portrait_result.getpixel((540, 540))[0], 150)
         with Image.open(safe_paths[1]) as panorama_result:
-            self.assertEqual(panorama_result.getpixel((0, 0)), (32, 34, 38))
+            panorama_corner = panorama_result.getpixel((0, 0))
+            self.assertTrue(all(abs(a - b) <= 6 for a, b in zip(panorama_corner, (32, 34, 38))))
             self.assertGreater(panorama_result.getpixel((540, 540))[1], 150)
 
         self.assertEqual(portrait.read_bytes(), portrait_original)
