@@ -90,6 +90,29 @@ class PlatePrivacyTests(unittest.TestCase):
         self.assertEqual(panorama.read_bytes(), panorama_original)
         self.assertEqual(summary["plate_redaction_image_count"], 2)
 
+    def test_plate_detection_batches_large_photo_sets(self):
+        sources = []
+        for index in range(7):
+            path = self.root / f"car_{index}.jpg"
+            Image.new("RGB", (240, 120), (70 + index, 90, 110)).save(path, quality=90)
+            sources.append(path)
+
+        def fake_detector(batch):
+            return [
+                {"index": i, "plates": [], "needs_review": False}
+                for i, _ in enumerate(batch, 1)
+            ]
+
+        with patch("app.ai.plate_privacy._detect_license_plates", side_effect=fake_detector) as detector:
+            safe_paths, summary = create_plate_safe_copies(sources)
+
+        self.assertEqual([len(call.args[0]) for call in detector.call_args_list], [3, 3, 1])
+        self.assertEqual(len(safe_paths), 7)
+        self.assertEqual(summary["plate_redaction_image_count"], 7)
+        self.assertTrue(all(path.exists() for path in safe_paths))
+        for source in sources:
+            self.assertTrue(source.exists(), "Uploaded/original files must remain intact")
+
     def test_no_detected_plate_still_creates_separate_copy(self):
         result = [{"index": 1, "plates": [], "needs_review": False}]
         with patch("app.ai.plate_privacy._detect_license_plates", return_value=result):
