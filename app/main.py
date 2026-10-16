@@ -1263,14 +1263,31 @@ def dashboard_metrics(history):
 
 @app.errorhandler(413)
 def request_too_large(error):
+    # A handler for oversized uploads must not fail by querying Supabase again
+    # while trying to render its own error page.
+    history = []
+    approval_queue = []
+    history_display = []
+    metrics = {
+        "approved": 0, "published": 0, "pending_publication": 0,
+        "photos": 0, "vehicles": 0, "services": 0, "latest_published": None,
+    }
+    try:
+        history = load_history()
+        approval_queue = load_approval_queue()
+        history_display = dashboard_history_display(history)
+        metrics = dashboard_metrics(history)
+    except Exception:
+        app.logger.exception("Falha ao carregar estado enquanto tratava upload acima do limite")
     return render_template(
         "dashboard.html",
         result=None,
-        error="O servidor recusou o envio porque o pacote ficou grande demais. Selecione menos fotos ou tente novamente; o V11 já comprime as imagens no navegador antes de enviar.",
+        error="O envio ficou acima do limite de 35 MB do servidor. As fotos originais continuam preservadas; reduza a quantidade ou o tamanho dos arquivos e tente novamente.",
         approved=None,
-        history=load_history(),
-        history_display=dashboard_history_display(load_history()),
-        approval_queue=load_approval_queue(),
+        history=history,
+        history_display=history_display,
+        approval_queue=approval_queue,
+        metrics=metrics,
     ), 413
 
 
