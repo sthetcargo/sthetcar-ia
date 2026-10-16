@@ -39,6 +39,7 @@ required_functions = {
     "_wait_for_container",
     "instagram_create_container",
     "instagram_test_media",
+    "dashboard_history_display",
 }
 missing = required_functions - function_names
 assert not missing, f"Missing required functions: {sorted(missing)}"
@@ -142,6 +143,21 @@ assert "rewrite_error or request.args.get(\"rewrite_error\")" in review_template
 assert "A legenda e as fotos do post não foram alteradas" in rewrite_error_template
 
 
+# Discarding a publication-queue item hides it from active dashboard history,
+# while preserving the original history record and its post index.
+dashboard_history_source = ast.get_source_segment(source, function_nodes["dashboard_history_display"])
+assert 'publication_queue_status' in dashboard_history_source and '"DESCARTADO"' in dashboard_history_source
+assert 'visible_item["history_index"] = history_index' in dashboard_history_source
+metrics_source = ast.get_source_segment(source, function_nodes["dashboard_metrics"])
+assert '"DESCARTADO"' in metrics_source, "Discarded queue items must not count as active approved posts"
+
+dashboard_template_path = root / "app" / "templates" / "dashboard.html"
+dashboard_template = dashboard_template_path.read_text(encoding="utf-8")
+Environment().parse(dashboard_template)
+assert "{% for item in history_display %}" in dashboard_template
+assert "post=item.history_index" in dashboard_template, "Filtered history must retain original post indexes"
+assert "Posts ativos" in dashboard_template and "Descartados" in dashboard_template
+
 # Parse both Jinja templates without executing actions or making API calls.
 template = template_path.read_text(encoding="utf-8")
 Environment().parse(template)
@@ -175,4 +191,4 @@ assert 'status = _wait_for_container(connection, container_id, timeout=120)' in 
 assert 'existing_container_id' in test_media_source and 'existing_status not in {"ERROR", "EXPIRED"}' in test_media_source, "Retry must reuse an in-progress container"
 assert test_media_source.find("save_publication_draft(draft)") < test_media_source.find("_wait_for_container(connection, container_id"), "Save container ID before polling so a retry can resume"
 
-print("PASS: Python AST, Facebook routes, publication confirmation guards, Instagram media polling/retry, caption rewrite safeguards, and relevant Jinja templates.")
+print("PASS: Python AST, publication guards, Instagram media polling/retry, caption rewrite safeguards, discarded-history filtering, and relevant Jinja templates.")
