@@ -2433,6 +2433,155 @@ def edit_publication_queue():
     return redirect(url_for("publication_queue"))
 
 
+@app.route("/fila-publicacoes/dividir", methods=["POST"])
+def split_publication_in_queue():
+    """Create independently reviewable parts without deleting the source post."""
+    approved_at = request.form.get("approved_at", "").strip()
+    history = load_history()
+    parent_index = next(
+        (
+            index for index, item in enumerate(history)
+            if str(item.get("approved_at", "")).strip() == approved_at
+        ),
+        -1,
+    )
+    if parent_index < 0:
+        return redirect(url_for("publication_queue", queue_error="Não encontrei o post selecionado."))
+
+    parent = history[parent_index]
+    queue_status = str(parent.get("publication_queue_status", "")).strip().upper()
+    if queue_status in {"DESCARTADO", "DIVIDIDO"}:
+        return redirect(url_for("publication_queue", queue_error="Este post já foi descartado ou dividido."))
+
+    before = parent.get("before_images") or ([parent.get("before_image")] if parent.get("before_image") else [])
+    after = parent.get("after_images") or ([parent.get("after_image")] if parent.get("after_image") else [])
+    total_photos = len(before) + len(after)
+    if total_photos <= 10:
+        return redirect(url_for("publication_queue", queue_error="Este post tem até 10 fotos e não precisa ser dividido."))
+
+    instagram_connection = load_instagram_connection()
+    instagram_record = find_publication_record(
+        parent, load_publication_audit(), instagram_connection.get("username", "")
+    )
+    facebook_connection = load_facebook_connection()
+    facebook_record = find_facebook_publication_record(
+        parent, load_facebook_publication_audit(), facebook_connection.get("page_id", "")
+    )
+    if str(facebook_record.get("status", "")).upper() == "PUBLICADO":
+        return redirect(url_for(
+            "publication_queue",
+            queue_error=(
+                "Este post já foi publicado no Facebook. A divisão foi bloqueada para evitar duplicações. "
+                "Nenhum post foi alterado."
+            ),
+        ))
+
+    try:
+        parts = split_photo_collections(before, after, max_items=10)
+    except (TypeError, ValueError) as exc:
+        app.logger.warning("Falha ao dividir publicação aprovada: %s", type(exc).__name__)
+        return redirect(url_for(
+            "publication_queue",
+            queue_error="Não foi possível dividir as fotos com segurança. O post original foi preservado.",
+        ))
+
+    if len(parts) < 2 or any(
+        len(part["before_images"]) + len(part["after_images"]) > 10 for part in parts
+    ):
+        return redirect(url_for(
+            "publication_queue",
+            queue_error="A divisão não gerou partes válidas. O post original foi preservado.",
+        ))
+
+    source_before_original = parent.get("before_images_original") or []
+    source_after_original = parent.get("after_images_original") or []
+    before_original_offset = 0
+    after_original_offset = 0
+    existing_keys = {
+        str(item.get("approved_at", "")).strip()
+        for item in history
+        if str(item.get("approved_at", "")).strip()
+    }
+    children = []
+    now = datetime.now()
+    instagram_already_published = str(instagram_record.get("status", "")).upper() == "PUBLICADO"
+    for part_number, part in enumerate(parts, 1):
+        part_before = list(part["before_images"])
+        part_after = list(part["after_images"])
+        part_before_original = source_before_original[
+            before_original_offset:before_original_offset + len(part_before)
+        ]
+        part_after_original = source_after_original[
+            after_original_offset:after_original_offset + len(part_after)
+        ]
+        before_original_offset += len(part_before)
+        after_original_offset += len(part_after)
+
+        candidate = now + timedelta(microseconds=part_number)
+        part_approved_at = candidate.isoformat(timespec="microseconds")
+        while part_approved_at in existing_keys:
+            candidate += timedelta(microseconds=1)
+            part_approved_at = candidate.isoformat(timespec="microseconds")
+        existing_keys.add(part_approved_at)
+
+        child = copy.deepcopy(parent)
+        child["approved_at"] = part_approved_at
+        child["source_approved_at"] = approved_at
+        child["publication_group_id"] = approved_at
+        child["publication_part_number"] = part_number
+        child["publication_part_count"] = len(parts)
+        child["publication_queue_status"] = "AGUARDANDO"
+        child["status"] = f"APROVADO — PARTE {part_number}/{len(parts)} — aguardando publicação"
+        child["before_images"] = part_before
+        child["after_images"] = part_after
+        child["before_image"] = part_before[0] if part_before else ""
+        child["after_image"] = part_after[0] if part_after else ""
+        child["before_images_original"] = list(part_before_original)
+        child["after_images_original"] = list(part_after_original)
+        child["caption"] = (
+            f"{str(parent.get('caption', '')).strip()}\n\nParte {part_number} de {len(parts)} desta transformação."
+        ).strip()
+        child["plate_redaction_message"] = (
+            f"Parte {part_number} de {len(parts)}. Esta publicação usa {len(part_before) + len(part_after)} "
+            "cópia(s) de mídia protegidas. Revise todas as prévias; a detecção automática pode falhar."
+        )
+        child["plate_redaction_image_count"] = len(part_before) + len(part_after)
+        child["source_plate_redaction_count"] = parent.get("plate_redaction_count")
+        # The original aggregate detection count cannot be attributed to individual
+        # photos from the saved summary, so do not present it as a per-part count.
+        child["plate_redaction_count"] = None
+        child["split_pending_facebook"] = False
+        child.pop("split_children", None)
+        child.pop("discarded_from_queue_at", None)
+        child.pop("instagram_publication", None)
+        child.pop("facebook_publication", None)
+
+        # The original ten carousel items already published to Instagram must not
+        # be published a second time. Transfer their existing record to part one.
+        if part_number == 1 and instagram_already_published:
+            child["instagram_publication"] = copy.deepcopy(instagram_record)
+            child["status"] = "PUBLICADO NO INSTAGRAM — aguardando Facebook"
+            child["split_pending_facebook"] = True
+
+        children.append(child)
+
+    parent["publication_queue_status"] = "DIVIDIDO"
+    parent["split_at"] = datetime.now().isoformat(timespec="seconds")
+    parent["split_children"] = [child["approved_at"] for child in children]
+    parent["split_part_count"] = len(children)
+    parent["status"] = "DIVIDIDO EM PARTES — post original preservado para histórico"
+    history[parent_index + 1:parent_index + 1] = children
+    save_history(history)
+
+    app.logger.info(
+        "Post aprovado dividido em partes: photos=%d parts=%d instagram_previously_published=%s",
+        total_photos,
+        len(children),
+        instagram_already_published,
+    )
+    return redirect(url_for("publication_queue", split_done="1"))
+
+
 @app.route("/instagram")
 def instagram_central():
     history = reconcile_publication_records(enrich_history(load_history()))
