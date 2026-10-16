@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 INSTAGRAM_IMAGE_SIZE = 1080
 PUBLICATION_BACKGROUND = (32, 34, 38)
+PLATE_DETECTION_BATCH_SIZE = 3
 
 
 class PlatePrivacyError(RuntimeError):
@@ -137,9 +138,22 @@ def create_plate_safe_copies(source_paths):
         for source in source_paths:
             safe_paths.append(_normalized_copy(source))
 
-        detections = _detect_license_plates(safe_paths)
-        if not isinstance(detections, list) or len(detections) != len(safe_paths):
-            raise PlatePrivacyError("Não foi possível verificar todas as fotos para placas.")
+        # Bound peak request memory: the Gemini request holds every image payload in
+        # memory. Process at most three already-resized 1080px JPEGs per API call.
+        detections = []
+        for start in range(0, len(safe_paths), PLATE_DETECTION_BATCH_SIZE):
+            batch = safe_paths[start:start + PLATE_DETECTION_BATCH_SIZE]
+            logger.info(
+                "Detecção de placas: lote %d, fotos %d-%d de %d",
+                (start // PLATE_DETECTION_BATCH_SIZE) + 1,
+                start + 1,
+                start + len(batch),
+                len(safe_paths),
+            )
+            batch_detections = _detect_license_plates(batch)
+            if not isinstance(batch_detections, list) or len(batch_detections) != len(batch):
+                raise PlatePrivacyError("Não foi possível verificar todas as fotos para placas.")
+            detections.extend(batch_detections)
 
         total_plates = 0
         images_with_plates = 0

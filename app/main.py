@@ -1364,12 +1364,45 @@ def request_too_large(error):
 
 @app.route("/", methods=["GET", "POST"])
 def dashboard():
+    create_request_id = f"CREATE-{secrets.token_hex(4).upper()}" if request.method == "POST" else ""
+    if create_request_id:
+        app.logger.info(
+            "Solicitação de criação recebida [%s], content_length=%s",
+            create_request_id,
+            request.content_length,
+        )
     result = None
     error = request.args.get("queue_error")
     approved = None
-    history = reconcile_publication_records(enrich_history(load_history()))
-    approval_queue = load_approval_queue()
-    metrics = dashboard_metrics(history)
+    try:
+        history = reconcile_publication_records(enrich_history(load_history()))
+        approval_queue = load_approval_queue()
+        metrics = dashboard_metrics(history)
+    except Exception as exc:
+        diagnostic_id = create_request_id or f"LOAD-{secrets.token_hex(4).upper()}"
+        app.logger.exception(
+            "Falha ao carregar estado da página principal [%s] (%s)",
+            diagnostic_id,
+            type(exc).__name__,
+        )
+        error = (
+            "Não foi possível carregar os dados necessários para continuar. "
+            "Nenhum post foi criado. Atualize a página e tente novamente. "
+            f"Código de diagnóstico: {diagnostic_id}."
+        )
+        return render_template(
+            "dashboard.html",
+            result=None,
+            error=error,
+            approved=None,
+            history=[],
+            history_display=[],
+            approval_queue=[],
+            metrics={
+                "approved": 0, "published": 0, "pending_publication": 0,
+                "photos": 0, "vehicles": 0, "services": 0, "latest_published": None,
+            },
+        ), 503
 
     if request.method == "POST":
         action = request.form.get("action", "generate")
@@ -1465,7 +1498,13 @@ def dashboard():
                 safe_paths = []
                 before_urls, after_urls = [], []
                 before_original_urls, after_original_urls = [], []
+                stage = "salvar fotos enviadas"
                 try:
+                    app.logger.info(
+                        "Criação de post [%s]: iniciando salvamento de %d foto(s)",
+                        create_request_id,
+                        len(before_files) + len(after_files),
+                    )
                     for idx, file in enumerate(before_files, 1):
                         name = f"{stamp}_antes_{idx}_{secure_filename(file.filename)}"
                         path = BEFORE_DIR / name
@@ -1485,23 +1524,61 @@ def dashboard():
                     if total_saved > MAX_TOTAL_UPLOAD_BYTES:
                         raise RuntimeError(f"As mídias ficaram em {total_saved / (1024 * 1024):.1f} MB. O limite total é de 30 MB.")
 
-                    # Create separate, orientation-normalized copies; never overwrite originals.
-                    # If detection or coordinate validation fails, content generation stops safely.
+                    total_saved = sum(path.stat().st_size for path in before_paths + after_paths if path.exists())
+                    app.logger.info(
+                        "Criação de post [%s]: uploads salvos, fotos=%d, bytes=%d",
+                        create_request_id,
+                        len(before_paths) + len(after_paths),
+                        total_saved,
+                    )
+
+                    # Keep each Gemini vision request bounded to small image batches.
+                    # Never overwrite the uploaded copies; protection writes separate squares.
+                    stage = "proteger placas"
+                    app.logger.info(
+                        "Criação de post [%s]: iniciando proteção de placas",
+                        create_request_id,
+                    )
                     safe_paths, plate_redaction = create_plate_safe_copies(before_paths + after_paths)
                     safe_before_paths = safe_paths[:len(before_paths)]
                     safe_after_paths = safe_paths[len(before_paths):]
-
-                    analysis = analyze_before_after(
-                        before_paths, after_paths, vehicle, service, notes
+                    app.logger.info(
+                        "Criação de post [%s]: proteção concluída, fotos=%d",
+                        create_request_id,
+                        len(safe_paths),
                     )
+
+                    # Analyze already-downscaled and plate-protected copies, not the larger uploads.
+                    # This limits peak memory in Gemini while retaining all before/after angles.
+                    stage = "analisar cópias protegidas"
+                    app.logger.info(
+                        "Criação de post [%s]: iniciando análise de %d foto(s) protegidas",
+                        create_request_id,
+                        len(safe_before_paths) + len(safe_after_paths),
+                    )
+                    analysis = analyze_before_after(
+                        safe_before_paths, safe_after_paths, vehicle, service, notes
+                    )
+                    app.logger.info(
+                        "Criação de post [%s]: análise visual concluída",
+                        create_request_id,
+                    )
+
                     # Preserve originals in storage for future re-editing, but point all previews
                     # and publication flows at the redacted copies only.
+                    stage = "enviar imagens ao armazenamento"
                     before_original_urls = [_remote_ref_for_local(path, "before") for path in before_paths]
                     after_original_urls = [_remote_ref_for_local(path, "after") for path in after_paths]
                     before_urls = [_remote_ref_for_local(path, "before") for path in safe_before_paths]
                     after_urls = [_remote_ref_for_local(path, "after") for path in safe_after_paths]
+                    app.logger.info(
+                        "Criação de post [%s]: envio ao armazenamento concluído",
+                        create_request_id,
+                    )
                     # If the user left these fields blank, use only conservative
                     # labels that are explicitly supported by the visual analysis.
+                    stage = "gerar legenda"
+                    app.logger.info("Criação de post [%s]: iniciando geração da legenda", create_request_id)
                     resolved_vehicle = vehicle or infer_vehicle(analysis)
                     resolved_service = service or infer_service(analysis)
                     post = generate_post(analysis, resolved_vehicle, resolved_service, notes)
@@ -1531,7 +1608,14 @@ def dashboard():
                     approval_queue.insert(0, pending)
                     save_approval_queue(approval_queue)
                     result["pending_id"] = pending["pending_id"]
+                    app.logger.info("Criação de post [%s]: concluída com sucesso", create_request_id)
                 except Exception as exc:
+                    app.logger.exception(
+                        "Falha ao criar post [%s], etapa=%s, tipo=%s",
+                        create_request_id,
+                        stage,
+                        type(exc).__name__,
+                    )
                     for path in before_paths + after_paths + safe_paths:
                         try:
                             if path.exists():

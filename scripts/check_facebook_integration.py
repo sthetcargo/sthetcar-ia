@@ -253,6 +253,20 @@ for content, label in (
 assert 'accept="image/jpeg,image/png,image/webp"' in dashboard_template
 assert "Vídeos serão liberados" in dashboard_template
 
+# Bound memory for the free Render instance while retaining support for 6+6 photos.
+assert "const MAX_DIMENSION = 1280;" in dashboard_template, "Browser upload should limit decoded image memory"
+assert "const JPEG_QUALITY = 0.76;" in dashboard_template, "Browser upload should use lower-memory JPEG compression"
+assert "PLATE_DETECTION_BATCH_SIZE = 3" in privacy_source, "Plate detection must be split into bounded batches"
+assert "_detect_license_plates(batch)" in privacy_source
+privacy_tests_source = (root / "tests" / "test_plate_privacy.py").read_text(encoding="utf-8")
+assert "test_plate_detection_batches_large_photo_sets" in privacy_tests_source
+assert "analyze_before_after(\n                        safe_before_paths, safe_after_paths" in dashboard_route_source, "Gemini analysis must use smaller protected copies, not larger originals"
+for stage_marker in (
+    "proteger placas", "analisar cópias protegidas", "enviar imagens ao armazenamento",
+    "app.logger.exception", "create_request_id",
+):
+    assert stage_marker in dashboard_route_source, f"Post-generation stage diagnostics missing {stage_marker}"
+
 # The pending-review page must support enlarging processed photos without changing
 # hidden post fields or bypassing the approval/publication safeguards.
 assert 'id="photo-lightbox"' in review_template, "Review page needs a photo lightbox"

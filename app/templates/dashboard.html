@@ -363,8 +363,8 @@
   <script>
     const MAX_PHOTOS = 6;
     const MAX_TOTAL_MB = 30;
-    const MAX_DIMENSION = 1800;
-    const JPEG_QUALITY = 0.82;
+    const MAX_DIMENSION = 1280;
+    const JPEG_QUALITY = 0.76;
 
     const state = {
       before: [],
@@ -469,7 +469,7 @@
           const before=await compressSide(state.before,'ANTES',progress);
           const after=await compressSide(state.after,'DEPOIS',progress);
           const total=[...before,...after].reduce((n,f)=>n+f.size,0);
-          progress.textContent='Mídias prontas: '+formatMB(total)+' enviadas para a IA.';
+          progress.textContent='Mídias prontas: '+formatMB(total)+'; as fotos foram reduzidas antes do envio.';
           if(total>MAX_TOTAL_MB*1024*1024){
             throw new Error('As mídias ficaram em '+formatMB(total)+'. Remova algum arquivo e tente novamente.');
           }
