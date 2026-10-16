@@ -1317,7 +1317,9 @@ def dashboard_metrics(history):
             when = pub.get("published_at") or ""
             if when and (latest_published is None or when > latest_published):
                 latest_published = when
-        else:
+        elif str(item.get("publication_queue_status", "")).strip().upper() != "DESCARTADO":
+            # Discarded posts remain in persistent history/audit, but must
+            # not continue to count as waiting to be published.
             pending_publication += 1
 
     return {
@@ -1490,12 +1492,22 @@ def dashboard():
                             pass
                     error = str(exc)
 
+    # Keep discarded items in persistent history/audit, but exclude them from
+    # the default approved-post cards. Carry each original index through so
+    # publishing links still reference the correct item in the full history.
+    dashboard_history = [
+        {**item, "history_index": index}
+        for index, item in enumerate(history)
+        if str(item.get("publication_queue_status", "")).strip().upper() != "DESCARTADO"
+    ]
+
     return render_template(
         "dashboard.html",
         result=result,
         error=error,
         approved=approved,
         history=history,
+        dashboard_history=dashboard_history,
         approval_queue=approval_queue,
         metrics=metrics,
     )
