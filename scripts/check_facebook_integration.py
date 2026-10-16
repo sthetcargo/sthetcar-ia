@@ -151,7 +151,8 @@ Environment().parse(dashboard_template)
 assert "dashboard_history" in dashboard_template, "Dashboard should render the active approved-history list separately"
 assert "post=item.history_index" in dashboard_template, "Filtered history links must retain indexes into the full persisted history"
 assert "publication_queue_status" in source and "DESCARTADO" in source, "Discarded queue posts must be filtered from active dashboard history"
-metrics_source = ast.get_source_segment(source, function_nodes["dashboard_metrics"])
+metrics_nodes = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+metrics_source = ast.get_source_segment(source, metrics_nodes["dashboard_metrics"])
 assert 'publication_queue_status' in metrics_source and '!= "DESCARTADO"' in metrics_source, "Discarded posts must not count as awaiting publication"
 confirm_template_path = root / "app" / "templates" / "confirm_platform_publication.html"
 confirm_template = confirm_template_path.read_text(encoding="utf-8")
