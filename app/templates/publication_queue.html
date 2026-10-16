@@ -33,6 +33,8 @@
 </head>
 <body><main class="wrap">
 <header class="top"><div><div class="eyebrow">Sthetcar IA · V31</div><h1>📋 Fila de Publicações</h1><p>Agora você controla a ordem das fotos antes de publicar. <strong>Nenhuma publicação acontece automaticamente.</strong></p></div><a class="back" href="{{ url_for('dashboard') }}#historico">← Voltar ao dashboard</a></header>
+{% if split_done %}<div class="notice success">✅ O post foi dividido em partes. O original foi preservado para histórico e nenhuma publicação foi feita. Revise cada parte antes de publicar.</div>{% endif %}
+{% if queue_error %}<div class="notice red">⚠️ {{ queue_error }}</div>{% endif %}
 
 <section class="card">
 <div class="stats">
@@ -52,6 +54,9 @@
 <article class="item">
 <div class="item-head"><div><div class="meta"><span class="status pending">APROVADO · AGUARDANDO</span><span>{{ item.approved_at|local_datetime if item.approved_at else 'Data não informada' }}</span></div><div class="vehicle">{{ item.vehicle or 'Veículo não informado' }}</div><div class="service">{{ item.service or 'Serviço não informado' }}</div></div><a class="btn primary" href="{{ url_for('instagram_central', post=item.index) }}">📲 Abrir publicação</a></div>
 <p class="caption">{{ item.caption }}</p>
+{% if item.photo_count > 10 and not item.facebook_published %}
+<form method="post" action="{{ url_for('split_publication_in_queue') }}" style="margin-top:10px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="approved_at" value="{{ item.approved_at }}"><button class="btn blue" type="submit" onclick="return confirm('Dividir este post em partes com no máximo 10 fotos cada? O original será preservado. As fotos não serão publicadas agora.');">✂️ Dividir em partes (até 10 fotos)</button><p class="save-note">Os pares ANTES/DEPOIS serão mantidos na mesma parte. Se as primeiras 10 fotos já foram publicadas no Instagram, essa parte será marcada como publicada para evitar duplicação.</p></form>
+{% endif %}
 
 <form class="queue-form" method="post" action="{{ url_for('edit_publication_queue') }}" onsubmit="return syncOrder(this)"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <input type="hidden" name="approved_at" value="{{ item.approved_at }}">
@@ -71,10 +76,12 @@
 {% else %}<div class="empty">🎉 Nenhum post está aguardando publicação.</div>{% endif %}
 </section>
 
+{% if divided %}<section class="card"><div class="section-head"><h2>✂️ Divididos em partes</h2><span class="count">{{ divided|length }} original{{ '' if divided|length == 1 else 'is' }}</span></div><p class="editor-help">Os originais abaixo foram preservados para histórico, mas ficam bloqueados para publicação. Use as partes criadas na seção de espera/publicados.</p>{% for item in divided %}<div class="discarded-row"><div><strong>{{ item.vehicle or 'Veículo não informado' }} · {{ item.service or 'Serviço não informado' }}</strong><small>{{ item.photo_count }} fotos no original · {{ item.split_count }} partes criadas · {{ item.approved_at|local_datetime if item.approved_at else 'data não informada' }}</small></div><span class="status discarded">DIVIDIDO · ORIGINAL PRESERVADO</span></div>{% endfor %}</section>{% endif %}
+
 <section class="card">
 <div class="section-head"><h2>🟢 Publicados</h2><span class="count">{{ published|length }} concluído{{ '' if published|length == 1 else 's' }}</span></div>
 {% if published %}
-{% for item in published %}<article class="item"><div class="item-head"><div><div class="meta"><span class="status published">✓ PUBLICADO</span><span>{{ item.publication.published_at|local_datetime if item.publication.published_at else 'Data não informada' }}</span></div><div class="vehicle">{{ item.vehicle or 'Veículo não informado' }}</div><div class="service">{{ item.service or 'Serviço não informado' }}</div></div><a class="btn secondary" href="{{ url_for('instagram_central', post=item.index) }}">👀 Ver publicação</a></div><p class="caption">{{ item.caption }}</p>{% if item.publication.media_id %}<div class="save-note">🆔 ID Instagram: {{ item.publication.media_id }}</div>{% endif %}</article>{% endfor %}
+{% for item in published %}<article class="item"><div class="item-head"><div><div class="meta"><span class="status published">✓ PUBLICADO</span><span>{{ item.publication.published_at|local_datetime if item.publication.published_at else 'Data não informada' }}</span></div><div class="vehicle">{{ item.vehicle or 'Veículo não informado' }}</div><div class="service">{{ item.service or 'Serviço não informado' }}</div></div><a class="btn secondary" href="{{ url_for('instagram_central', post=item.index) }}">👀 Ver publicação</a></div><p class="caption">{{ item.caption }}</p>{% if item.photo_count > 10 and not item.facebook_published %}<form method="post" action="{{ url_for('split_publication_in_queue') }}" style="margin-top:10px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="approved_at" value="{{ item.approved_at }}"><button class="btn blue" type="submit" onclick="return confirm('Dividir este post em partes com no máximo 10 fotos cada? O original será preservado. As fotos não serão publicadas agora.');">✂️ Dividir em partes (até 10 fotos)</button><p class="save-note">A parte já publicada no Instagram será preservada e não poderá ser publicada de novo. As partes ainda não publicadas poderão ser revistas individualmente.</p></form>{% endif %}{% if item.publication.media_id %}<div class="save-note">🆔 ID Instagram: {{ item.publication.media_id }}</div>{% endif %}</article>{% endfor %}
 {% else %}<div class="empty">Ainda não há publicações concluídas.</div>{% endif %}
 </section>
 
