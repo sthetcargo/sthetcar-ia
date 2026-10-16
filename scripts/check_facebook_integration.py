@@ -227,7 +227,12 @@ assert "detect_license_plates" in detector_functions
 plate_detector_source = ast.get_source_segment(detector_source, detector_functions["detect_license_plates"])
 assert "needs_review" in plate_detector_source and "x1" in plate_detector_source
 assert "Não transcreva" in plate_detector_source, "The detector must localize plates without reading their characters"
-assert "json.loads" in plate_detector_source and "range(1, len(paths) + 1)" in plate_detector_source
+plate_parser_source = ast.get_source_segment(detector_source, detector_functions["_parse_plate_detection_json"])
+assert "json.loads" in plate_parser_source, "Detector response must be parsed as strict JSON"
+assert "isinstance(payload, dict)" in plate_parser_source, "Detector JSON must be an object"
+assert "range(1, len(paths) + 1)" in plate_detector_source, "Every input image index must be verified"
+assert 'response_mime_type="application/json"' in plate_detector_source
+assert "response_schema=PLATE_DETECTION_RESPONSE_SCHEMA" in plate_detector_source
 
 dashboard_route_source = ast.get_source_segment(source, function_nodes["dashboard"])
 assert "create_plate_safe_copies" in dashboard_route_source, "New uploads must be processed before creating a post"
@@ -403,4 +408,24 @@ assert "gunicorn>=" in requirements_text
 assert (root / ".gitignore").is_file()
 assert "py[cod]" in (root / ".gitignore").read_text(encoding="utf-8")
 
-print("PASS: static integration checks, UTF-8 text, isolated vehicle/service inference, Gemini config regression, safe oversized-upload handling, runtime/package declarations, and Jinja templates.")
+
+# Plate detection must request structured JSON, not rely only on prompt instructions.
+plate_detector_node = next(
+    node for node in ast.walk(gemini_tree)
+    if isinstance(node, ast.FunctionDef) and node.name == "detect_license_plates"
+)
+plate_detector_source = ast.get_source_segment(gemini_source, plate_detector_node)
+assert 'response_mime_type="application/json"' in plate_detector_source
+assert "response_schema=PLATE_DETECTION_RESPONSE_SCHEMA" in plate_detector_source
+assert "max_output_tokens=4096" in plate_detector_source
+assert "def _parse_plate_detection_json" in gemini_source
+assert "def _plate_response_status" in gemini_source
+plate_detection_tests = (root / "tests" / "test_plate_detection_response.py").read_text(encoding="utf-8")
+for marker in (
+    "test_detector_uses_schema_mode_and_keeps_strict_validation",
+    "test_detector_does_not_accept_unparseable_response",
+    "test_parser_fails_closed_for_natural_language",
+):
+    assert marker in plate_detection_tests, f"Missing plate-detection response test: {marker}"
+
+print("PASS: static integration checks, UTF-8 text, isolated vehicle/service inference, Gemini config regression, structured plate detection, safe oversized-upload handling, runtime/package declarations, and Jinja templates.")

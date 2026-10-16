@@ -21,6 +21,40 @@ DEFAULT_MODELS = [
     "gemini-3.6-flash",
 ]
 
+# Gemini structured output: the detector must return one validated entry per image.
+# Schema mode reduces free-form answers but callers still validate every field and
+# fail closed if a plate cannot be localized with confidence.
+PLATE_DETECTION_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "images": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "plates": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "x1": {"type": "number"},
+                                "y1": {"type": "number"},
+                                "x2": {"type": "number"},
+                                "y2": {"type": "number"},
+                            },
+                            "required": ["x1", "y1", "x2", "y2"],
+                        },
+                    },
+                    "needs_review": {"type": "boolean"},
+                },
+                "required": ["index", "plates", "needs_review"],
+            },
+        },
+    },
+    "required": ["images"],
+}
+
 def _client():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -98,20 +132,38 @@ def _fallback_caption(analysis: str, vehicle: str = "", service: str = ""):
     )
 
 
-def _generation_config(model, temperature, max_output_tokens):
+def _generation_config(
+    model,
+    temperature,
+    max_output_tokens,
+    response_mime_type=None,
+    response_schema=None,
+):
     """Build model-compatible generation settings without network access.
 
     Gemini 3.x and 4.x require sampling parameters to remain at API defaults;
     older model families retain the application's existing temperature tuning.
+    Optional structured-output settings are used for machine-parsed responses.
     """
     normalized_model = str(model or "").strip().lower().removeprefix("models/")
     options = {"max_output_tokens": max_output_tokens}
     if not normalized_model.startswith(("gemini-3", "gemini-4")):
         options["temperature"] = temperature
+    if response_mime_type:
+        options["response_mime_type"] = response_mime_type
+    if response_schema is not None:
+        options["response_schema"] = response_schema
     return types.GenerateContentConfig(**options)
 
 
-def _generate(client, contents, temperature, max_output_tokens):
+def _generate(
+    client,
+    contents,
+    temperature,
+    max_output_tokens,
+    response_mime_type=None,
+    response_schema=None,
+):
     last_error = None
     for model in _models_to_try():
         started_at = time.monotonic()
@@ -120,7 +172,13 @@ def _generate(client, contents, temperature, max_output_tokens):
             response = client.models.generate_content(
                 model=model,
                 contents=contents,
-                config=_generation_config(model, temperature, max_output_tokens),
+                config=_generation_config(
+                    model,
+                    temperature,
+                    max_output_tokens,
+                    response_mime_type=response_mime_type,
+                    response_schema=response_schema,
+                ),
             )
             logger.info(
                 "Gemini generation completed model=%s elapsed_seconds=%.1f",
@@ -472,6 +530,39 @@ def generate_post(analysis: str, vehicle: str = "",
 
 
 
+def _parse_plate_detection_json(raw):
+    """Parse the detector's structured JSON response without guessing content."""
+    text = (raw or "").strip()
+    if not text:
+        raise RuntimeError("O detector de placas não retornou uma resposta.")
+    # Tolerate a Markdown-fenced JSON object from older/model-specific responses,
+    # but don't extract arbitrary braces from natural-language prose.
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    else:
+        text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text, flags=re.IGNORECASE).strip()
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("O detector de placas retornou um formato inválido.") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("O detector de placas retornou um objeto JSON inválido.")
+    return payload
+
+
+def _plate_response_status(response):
+    """Return non-sensitive API status metadata; never log prompts or image contents."""
+    candidates = getattr(response, "candidates", None) or []
+    finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    prompt_feedback = getattr(response, "prompt_feedback", None)
+    block_reason = getattr(prompt_feedback, "block_reason", None) if prompt_feedback else None
+    return (
+        str(getattr(finish_reason, "name", finish_reason) or "unknown")[:80],
+        str(getattr(block_reason, "name", block_reason) or "none")[:80],
+    )
+
+
 def detect_license_plates(paths):
     """Return normalized bounding boxes for every visible license plate in each image.
 
@@ -516,23 +607,30 @@ Regras:
     for index, path in enumerate(paths, 1):
         contents.extend([f"IMAGEM {index} (índice obrigatório: {index})", _image_part(path)])
 
-    response, _ = _generate(
+    response, model = _generate(
         client,
         contents,
         temperature=0,
-        max_output_tokens=min(4096, max(900, len(paths) * 240)),
+        # Each request handles at most three photos; reserve enough output room
+        # for complete coordinates even if many plates are visible.
+        max_output_tokens=4096,
+        response_mime_type="application/json",
+        response_schema=PLATE_DETECTION_RESPONSE_SCHEMA,
     )
     raw = _response_text(response)
-    if not raw:
-        raise RuntimeError("O detector de placas não retornou uma resposta.")
-    raw = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", raw, flags=re.IGNORECASE)
-    start, end = raw.find("{"), raw.rfind("}")
-    if start < 0 or end < start:
-        raise RuntimeError("O detector de placas retornou um formato inválido.")
     try:
-        payload = json.loads(raw[start:end + 1])
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("Não foi possível interpretar a detecção de placas.") from exc
+        payload = _parse_plate_detection_json(raw)
+    except RuntimeError:
+        finish_reason, block_reason = _plate_response_status(response)
+        # Never log raw model text, prompts, images, plate numbers, or credentials.
+        logger.warning(
+            "Plate detector returned invalid structured output model=%s text_chars=%d finish_reason=%s prompt_block_reason=%s",
+            model,
+            len(raw),
+            finish_reason,
+            block_reason,
+        )
+        raise
 
     entries = payload.get("images") if isinstance(payload, dict) else None
     if not isinstance(entries, list) or len(entries) != len(paths):
