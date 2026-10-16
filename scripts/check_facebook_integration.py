@@ -259,4 +259,16 @@ assert "Clique ou toque em qualquer foto para ampliar" in review_template
 assert 'id="approval-form"' in review_template and 'name="action" value="approve"' in review_template
 assert 'name="action" value="publish"' not in review_template, "Photo zoom must not add publication controls"
 
-print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, and Jinja templates.")
+
+# The Instagram media-test endpoint must safely handle state-load failures before
+# any external media request, rather than returning Flask's unhelpful HTTP 500.
+media_test_source = ast.get_source_segment(source, function_nodes["instagram_test_media"])
+first_try = media_test_source.find("try:")
+first_history_load = media_test_source.find("history = reconcile_publication_records(enrich_history(load_history()))")
+assert first_try >= 0 and first_history_load > first_try, "Media-test state loading must be guarded"
+for marker in ("load_instagram_connection()", "load_publication_audit()", "MEDIA-", "app.logger.exception"):
+    assert marker in media_test_source, f"Media-test initialization error handling missing {marker}"
+assert "Nenhuma publicação foi feita" in media_test_source, "Failure must tell the user no post was published"
+assert "Código de diagnóstico:" in media_test_source, "Failure must provide a safe diagnostic code"
+
+print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, and Jinja templates.")
