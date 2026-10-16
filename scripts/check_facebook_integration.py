@@ -355,4 +355,52 @@ assert "Gemini generation started model=%s" in generate_source
 assert "Gemini generation completed model=%s elapsed_seconds=%.1f" in generate_source
 assert "Gemini generation failed model=%s elapsed_seconds=%.1f error_type=%s" in generate_source
 
-print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, Brasília timezone formatting, Gemini request timing/timeouts, Gunicorn timeout configuration, and Jinja templates.")
+
+# Audit regressions: inference functions must live in a pure, offline-testable module.
+inference_path = root / "app" / "ai" / "text_inference.py"
+inference_source = inference_path.read_text(encoding="utf-8")
+inference_tree = ast.parse(inference_source, filename=str(inference_path))
+inference_functions = {
+    node.name: node for node in ast.walk(inference_tree)
+    if isinstance(node, ast.FunctionDef)
+}
+assert {"infer_vehicle", "infer_service"} <= set(inference_functions)
+assert "from app.ai.text_inference import infer_service, infer_vehicle" in source
+assert "VE[IÍ]CULO\\\\s+IDENTIFICADO" not in inference_source or "VE[IÍ]CULO\\\\s+IDENTIFICADO" in inference_source
+assert "não identificado" in inference_source
+assert "Lavagem e Higienização" in inference_source
+assert "test_uncertain_vehicle_is_not_inferred_from_placeholder" in (root / "tests" / "test_text_inference.py").read_text(encoding="utf-8")
+
+# Portuguese text should be UTF-8, not UTF-8 bytes misread as Latin-1.
+mojibake_markers = ("Ã£", "Ã§", "Ã©", "Ã­", "Ã¡", "Ã³", "Ãº", "Ãª", "Ãµ", "Ã", "â€”", "â€“", "â€™")
+for relative_path in ("app/main.py", "app/ai/text_inference.py", "README.md"):
+    content = (root / relative_path).read_text(encoding="utf-8")
+    assert not any(marker in content for marker in mojibake_markers), f"Corrupted Portuguese encoding remains in {relative_path}"
+
+# Gemini generation configuration is covered with a fake client; no credential or API call is used.
+generation_config_node = next(
+    node for node in ast.walk(gemini_tree)
+    if isinstance(node, ast.FunctionDef) and node.name == "_generation_config"
+)
+generation_config_source = ast.get_source_segment(gemini_source, generation_config_node)
+assert 'startswith(("gemini-3", "gemini-4"))' in generation_config_source
+assert "types.GenerateContentConfig(**options)" in generation_config_source
+assert "test_generate_uses_mocked_client_without_network_or_api_key" in (root / "tests" / "test_gemini_config.py").read_text(encoding="utf-8")
+
+# Keep 413 handling safe even if state reads fail while building the error page.
+handler_node = next(
+    node for node in ast.walk(tree)
+    if isinstance(node, ast.FunctionDef) and node.name == "request_too_large"
+)
+handler_source = ast.get_source_segment(source, handler_node)
+assert "try:" in handler_source and "except Exception:" in handler_source
+assert "Falha ao carregar estado enquanto tratava upload acima do limite" in handler_source
+
+# Production package/runtime declarations must be explicit and match the Render runtime.
+assert (root / ".python-version").read_text(encoding="utf-8").strip() == "3.14.3"
+requirements_text = (root / "requirements.txt").read_text(encoding="utf-8")
+assert "gunicorn>=" in requirements_text
+assert (root / ".gitignore").is_file()
+assert "py[cod]" in (root / ".gitignore").read_text(encoding="utf-8")
+
+print("PASS: static integration checks, UTF-8 text, isolated vehicle/service inference, Gemini config regression, safe oversized-upload handling, runtime/package declarations, and Jinja templates.")
