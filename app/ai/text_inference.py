@@ -12,8 +12,6 @@ def infer_vehicle(text: str):
     The AI may write model names in lowercase, inside a markdown section, or
     after words such as "picape". Keep the inference conservative.
     """
-    import re
-
     text = text or ""
     normalized = re.sub(r"\s+", " ", text).strip()
     if not normalized:
@@ -34,11 +32,13 @@ def infer_vehicle(text: str):
             "nao foi identificada", "não é possível identificar", "nao e possivel identificar",
         }
         value_key = re.sub(r"\s+", " ", value.casefold()).strip()
-        # Never turn a fragment of the generated prose into the vehicle name.
-        if value and value_key not in invalid_values and len(value.split()) <= 5:
-            generic_starts = ("posicion", "localiz", "apresent", "observ", "mostr", "está", "esta ")
-            if not value_key.startswith(generic_starts):
-                return value
+        # An explicit placeholder must remain empty; do not fall through and
+        # accidentally interpret "VEÍCULO IDENTIFICADO" as the model name.
+        generic_starts = ("posicion", "localiz", "apresent", "observ", "mostr", "está", "esta ")
+        if not value or value_key in invalid_values or value_key.startswith(generic_starts):
+            return ""
+        if len(value.split()) <= 5:
+            return value
 
     # Common explicit model codes/names that are safe to recognize when the
     # analysis clearly refers to the vehicle.
