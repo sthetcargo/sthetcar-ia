@@ -227,7 +227,12 @@ assert "detect_license_plates" in detector_functions
 plate_detector_source = ast.get_source_segment(detector_source, detector_functions["detect_license_plates"])
 assert "needs_review" in plate_detector_source and "x1" in plate_detector_source
 assert "Não transcreva" in plate_detector_source, "The detector must localize plates without reading their characters"
-assert "json.loads" in plate_detector_source and "range(1, len(paths) + 1)" in plate_detector_source
+plate_parser_source = ast.get_source_segment(detector_source, detector_functions["_parse_plate_detection_json"])
+assert "json.loads" in plate_parser_source, "Detector response must be parsed as strict JSON"
+assert "isinstance(payload, dict)" in plate_parser_source, "Detector JSON must be an object"
+assert "range(1, len(paths) + 1)" in plate_detector_source, "Every input image index must be verified"
+assert 'response_mime_type="application/json"' in plate_detector_source
+assert "response_schema=PLATE_DETECTION_RESPONSE_SCHEMA" in plate_detector_source
 
 dashboard_route_source = ast.get_source_segment(source, function_nodes["dashboard"])
 assert "create_plate_safe_copies" in dashboard_route_source, "New uploads must be processed before creating a post"
