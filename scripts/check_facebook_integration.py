@@ -234,7 +234,7 @@ assert "create_plate_safe_copies" in dashboard_route_source, "New uploads must b
 assert "before_images_original" in dashboard_route_source and "after_images_original" in dashboard_route_source
 assert "vídeos" in dashboard_route_source.casefold(), "Video uploads must be blocked until video-frame redaction exists"
 preflight_source = ast.get_source_segment(source, function_nodes["_preflight_selected_platforms"])
-assert 'str(post.get("plate_redaction_version", "")) != "1"' in preflight_source, "Legacy posts without redaction must not publish"
+assert 'str(post.get("plate_redaction_version", "")) != "2"' in preflight_source, "Only version-2 square JPEG posts may publish"
 assert "plate_redaction_version" in ast.get_source_segment(source, function_nodes["publication_confirmation_fingerprint"])
 
 dashboard_template_path = root / "app" / "templates" / "dashboard.html"
@@ -276,6 +276,8 @@ for marker in ("load_instagram_connection()", "load_publication_audit()", "MEDIA
     assert marker in media_test_source, f"Media-test initialization error handling missing {marker}"
 assert "Nenhuma publicação foi feita" in media_test_source, "Failure must tell the user no post was published"
 assert "Código de diagnóstico:" in media_test_source, "Failure must provide a safe diagnostic code"
+assert 'str(post.get("plate_redaction_version", "")) != "2"' in media_test_source, "Old copies must be blocked before submitting media to Instagram"
+assert "normalização quadrada para o Instagram" in media_test_source, "Old posts need a clear explanation of why retesting is blocked"
 
 
 # UI timestamps must be converted only for display to Brasília time. Stored publication

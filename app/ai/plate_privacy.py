@@ -181,7 +181,7 @@ def create_plate_safe_copies(source_paths):
             message += " A IA sinalizou uma ou mais imagens para conferência humana."
 
         return safe_paths, {
-            "plate_redaction_version": 1,
+            "plate_redaction_version": 2,
             "plate_redaction_count": total_plates,
             "plate_redaction_image_count": len(safe_paths),
             "plate_redaction_review_required": manual_review_required,

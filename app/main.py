@@ -1975,6 +1975,16 @@ def instagram_test_media():
         prior = find_publication_record(post, audit, connection.get("username", ""))
         if prior:
             return redirect(url_for("instagram_central", post=post_index, published="1", oauth_error="Este post jÃ¡ foi publicado no Instagram. O teste de mÃ­dia foi bloqueado para evitar duplicaÃ§Ã£o."))
+        if str(post.get("plate_redaction_version", "")) != "2":
+            return redirect(url_for(
+                "instagram_central",
+                post=post_index,
+                oauth_error=(
+                    "Este post usa cópias de mídia antigas, anteriores à normalização quadrada para o Instagram. "
+                    "Para evitar repetir o erro de proporção, crie um novo post com as fotos. "
+                    "Nenhuma publicação foi feita."
+                ),
+            ))
         draft = load_publication_draft()
         draft_matches = draft_matches_post(draft, post, post_index, connection)
         if not draft_matches:
@@ -2042,10 +2052,10 @@ def _preflight_selected_platforms(post_index, selected):
     post = history[post_index]
     if not publication_key(post):
         raise RuntimeError("O post aprovado não tem uma identificação estável para confirmação.")
-    if str(post.get("plate_redaction_version", "")) != "1":
+    if str(post.get("plate_redaction_version", "")) != "2":
         raise RuntimeError(
-            "Este post foi criado antes da proteção automática de placas. Para publicar com segurança, "
-            "crie novamente o conteúdo com as fotos e revise as cópias protegidas antes de confirmar."
+            "Este post foi criado antes da normalização quadrada das fotos para o Instagram. "
+            "Para publicar com segurança, crie novamente o conteúdo com as fotos e revise as cópias protegidas antes de confirmar."
         )
     if "instagram" in selected:
         preflight_instagram_for_post(post_index)
