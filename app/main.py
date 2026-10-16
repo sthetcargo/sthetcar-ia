@@ -1289,9 +1289,25 @@ def enrich_history(history):
 
 
 
+def dashboard_history_display(history):
+    """Hide posts discarded from the publication queue without deleting their audit records."""
+    visible = []
+    for history_index, item in enumerate(history):
+        if str(item.get("publication_queue_status", "")).strip().upper() == "DESCARTADO":
+            continue
+        visible_item = dict(item)
+        visible_item["history_index"] = history_index
+        visible.append(visible_item)
+    return visible
+
+
 def dashboard_metrics(history):
     """Build metrics using the reconciled publication audit as source of truth."""
     history = reconcile_publication_records(history)
+    history = [
+        item for item in history
+        if str(item.get("publication_queue_status", "")).strip().upper() != "DESCARTADO"
+    ]
     total_photos = 0
     published = 0
     pending_publication = 0
@@ -1338,6 +1354,7 @@ def request_too_large(error):
         error="O servidor recusou o envio porque o pacote ficou grande demais. Selecione menos fotos ou tente novamente; o V11 jÃ¡ comprime as imagens no navegador antes de enviar.",
         approved=None,
         history=load_history(),
+        history_display=dashboard_history_display(load_history()),
         approval_queue=load_approval_queue(),
     ), 413
 
@@ -1496,6 +1513,7 @@ def dashboard():
         error=error,
         approved=approved,
         history=history,
+        history_display=dashboard_history_display(history),
         approval_queue=approval_queue,
         metrics=metrics,
     )
