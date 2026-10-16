@@ -142,9 +142,17 @@ assert "rewrite_error or request.args.get(\"rewrite_error\")" in review_template
 assert "A legenda e as fotos do post não foram alteradas" in rewrite_error_template
 
 
-# Parse both Jinja templates without executing actions or making API calls.
+# Parse Jinja templates without executing actions or making API calls.
 template = template_path.read_text(encoding="utf-8")
 Environment().parse(template)
+dashboard_template_path = root / "app" / "templates" / "dashboard.html"
+dashboard_template = dashboard_template_path.read_text(encoding="utf-8")
+Environment().parse(dashboard_template)
+assert "dashboard_history" in dashboard_template, "Dashboard should render the active approved-history list separately"
+assert "post=item.history_index" in dashboard_template, "Filtered history links must retain indexes into the full persisted history"
+assert "publication_queue_status" in source and "DESCARTADO" in source, "Discarded queue posts must be filtered from active dashboard history"
+metrics_source = ast.get_source_segment(source, function_nodes["dashboard_metrics"])
+assert 'publication_queue_status' in metrics_source and '!= "DESCARTADO"' in metrics_source, "Discarded posts must not count as awaiting publication"
 confirm_template_path = root / "app" / "templates" / "confirm_platform_publication.html"
 confirm_template = confirm_template_path.read_text(encoding="utf-8")
 Environment().parse(confirm_template)
@@ -175,4 +183,4 @@ assert 'status = _wait_for_container(connection, container_id, timeout=120)' in 
 assert 'existing_container_id' in test_media_source and 'existing_status not in {"ERROR", "EXPIRED"}' in test_media_source, "Retry must reuse an in-progress container"
 assert test_media_source.find("save_publication_draft(draft)") < test_media_source.find("_wait_for_container(connection, container_id"), "Save container ID before polling so a retry can resume"
 
-print("PASS: Python AST, Facebook routes, publication confirmation guards, Instagram media polling/retry, caption rewrite safeguards, and relevant Jinja templates.")
+print("PASS: Python AST, Facebook routes, publication confirmation guards, Instagram media polling/retry, caption rewrite safeguards, discarded-history filtering, and relevant Jinja templates.")
