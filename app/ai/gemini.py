@@ -2,12 +2,16 @@ import os
 import json
 import difflib
 import re
+import logging
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Ordem pensada para manter o MVP no nível gratuito.
 # Se um modelo estiver temporariamente indisponível (503), o próximo é tentado.
@@ -24,7 +28,12 @@ def _client():
             "GEMINI_API_KEY não configurada. "
             "Crie um arquivo .env a partir de .env.example."
         )
-    return genai.Client(api_key=api_key)
+    # Explicitly cap each outbound API call so a stalled HTTPS read cannot leave
+    # the Gunicorn worker blocked indefinitely. The timeout is specified in ms.
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=60_000),
+    )
 
 def _media_part(path: Path):
     ext = path.suffix.lower()
@@ -92,6 +101,8 @@ def _fallback_caption(analysis: str, vehicle: str = "", service: str = ""):
 def _generate(client, contents, temperature, max_output_tokens):
     last_error = None
     for model in _models_to_try():
+        started_at = time.monotonic()
+        logger.info("Gemini generation started model=%s", model)
         try:
             response = client.models.generate_content(
                 model=model,
@@ -101,9 +112,21 @@ def _generate(client, contents, temperature, max_output_tokens):
                     max_output_tokens=max_output_tokens,
                 ),
             )
+            logger.info(
+                "Gemini generation completed model=%s elapsed_seconds=%.1f",
+                model,
+                time.monotonic() - started_at,
+            )
             return response, model
         except Exception as exc:
+            elapsed = time.monotonic() - started_at
             last_error = exc
+            logger.warning(
+                "Gemini generation failed model=%s elapsed_seconds=%.1f error_type=%s",
+                model,
+                elapsed,
+                type(exc).__name__,
+            )
             message = str(exc)
             # Só fazemos fallback automático para erros transitórios/indisponibilidade.
             if not any(code in message for code in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500", "INTERNAL")):
