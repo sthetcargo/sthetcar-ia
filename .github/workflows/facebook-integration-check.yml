@@ -24,7 +24,7 @@ jobs:
       - name: Install template parser and image processor
         run: python -m pip install --disable-pip-version-check Jinja2 "Pillow>=10.0,<13.0" "google-genai>=1.0.0" "python-dotenv>=1.0.0"
       - name: Compile Python source
-        run: python -m py_compile app/main.py app/ai/gemini.py app/ai/plate_privacy.py app/time_utils.py gunicorn.conf.py
+        run: python -m py_compile app/main.py app/ai/gemini.py app/ai/plate_privacy.py app/ai/text_inference.py app/time_utils.py gunicorn.conf.py
       - name: Run offline plate-privacy unit tests
         run: python -m unittest discover -s tests -v
       - name: Validate integration invariants and Jinja templates
