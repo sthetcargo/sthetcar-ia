@@ -147,9 +147,34 @@ assert "A legenda e as fotos do post não foram alteradas" in rewrite_error_temp
 # while preserving the original history record and its post index.
 dashboard_history_source = ast.get_source_segment(source, function_nodes["dashboard_history_display"])
 assert 'publication_queue_status' in dashboard_history_source and '"DESCARTADO"' in dashboard_history_source
+assert '"DIVIDIDO"' in dashboard_history_source, "Split parents must stay in history storage but be hidden from active history"
 assert 'visible_item["history_index"] = history_index' in dashboard_history_source
 metrics_source = ast.get_source_segment(source, function_nodes["dashboard_metrics"])
-assert '"DESCARTADO"' in metrics_source, "Discarded queue items must not count as active approved posts"
+assert '"DESCARTADO"' in metrics_source and '"DIVIDIDO"' in metrics_source, "Discarded and split-parent records must not inflate active post metrics"
+
+# Oversized approved posts must split into independent, reviewable parts without losing media.
+split_module_path = root / "app" / "publication_split.py"
+split_module_source = split_module_path.read_text(encoding="utf-8")
+ast.parse(split_module_source, filename=str(split_module_path))
+split_tests_source = (root / "tests" / "test_publication_split.py").read_text(encoding="utf-8")
+for marker in (
+    "test_twelve_photos_split_into_five_pairs_and_one_pair",
+    "test_eleven_photos_are_not_dropped_or_repeated",
+    "test_posts_with_ten_or_fewer_photos_remain_one_unchanged_part",
+):
+    assert marker in split_tests_source, f"Missing publication split regression test: {marker}"
+split_route_source = ast.get_source_segment(source, function_nodes["split_publication_in_queue"])
+for marker in (
+    "split_photo_collections", "parent[\"publication_queue_status\"] = \"DIVIDIDO\"",
+    "parent[\"split_children\"]", "save_history(history)", "instagram_already_published",
+    "child[\"instagram_publication\"]", "split_pending_facebook",
+):
+    assert marker in split_route_source, f"Publication split route is missing safety behavior: {marker}"
+instagram_items_source = ast.get_source_segment(source, function_nodes["instagram_media_items"])
+assert "chosen[:10]" not in instagram_items_source, "Do not silently drop the last two photos"
+assert "Dividir em partes" in instagram_items_source, "Oversized posts need a clear split instruction"
+facebook_media_source = ast.get_source_segment(source, function_nodes["facebook_media_urls"])
+assert "Divida-a em partes" in facebook_media_source, "Facebook 10-photo limit should explain the supported solution"
 
 dashboard_template_path = root / "app" / "templates" / "dashboard.html"
 dashboard_template = dashboard_template_path.read_text(encoding="utf-8")
