@@ -207,6 +207,12 @@ for required in ("create_plate_safe_copies", "_normalized_copy", "_pixel_box", "
 assert "ImageOps.exif_transpose" in privacy_source, "Plate coordinates must use normalized image orientation"
 assert "ImageFilter.GaussianBlur" in privacy_source and "Image.Resampling.NEAREST" in privacy_source
 assert "source.with_name" in privacy_source, "Redaction must write a separate copy instead of overwriting the original"
+assert "INSTAGRAM_IMAGE_SIZE = 1080" in privacy_source, "Publication copies must use a predictable supported size"
+assert "PUBLICATION_BACKGROUND" in privacy_source and "canvas.paste(image, offset)" in privacy_source
+assert 'source.stem}_placa_protegida.jpg' in privacy_source, "Instagram publication copies must be JPEG"
+assert 'format="JPEG"' in privacy_source, "Instagram API images must be saved as JPEG"
+assert "image.thumbnail(" in privacy_source, "Source photos must be contained without cropping to a supported square canvas"
+assert "test_portrait_png_and_panorama_webp_become_square_jpeg_without_cropping" in (root / "tests" / "test_plate_privacy.py").read_text(encoding="utf-8")
 assert "path.unlink()" in privacy_source, "Failed redaction copies must be cleaned up"
 assert "needs_review and not plates" in privacy_source, "Uncertain detections without a usable box must fail closed"
 
