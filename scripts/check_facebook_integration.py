@@ -191,4 +191,60 @@ assert 'status = _wait_for_container(connection, container_id, timeout=120)' in 
 assert 'existing_container_id' in test_media_source and 'existing_status not in {"ERROR", "EXPIRED"}' in test_media_source, "Retry must reuse an in-progress container"
 assert test_media_source.find("save_publication_draft(draft)") < test_media_source.find("_wait_for_container(connection, container_id"), "Save container ID before polling so a retry can resume"
 
-print("PASS: Python AST, publication guards, Instagram media polling/retry, caption rewrite safeguards, discarded-history filtering, and relevant Jinja templates.")
+
+
+# License-plate privacy: output copies only are blurred, originals remain intact,
+# ambiguous detection fails closed, and unprocessed legacy posts cannot publish.
+privacy_path = root / "app" / "ai" / "plate_privacy.py"
+privacy_source = privacy_path.read_text(encoding="utf-8")
+privacy_tree = ast.parse(privacy_source, filename=str(privacy_path))
+privacy_functions = {
+    node.name: node for node in ast.walk(privacy_tree)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+}
+for required in ("create_plate_safe_copies", "_normalized_copy", "_pixel_box", "_blur_region"):
+    assert required in privacy_functions, f"Plate privacy helper missing {required}"
+assert "ImageOps.exif_transpose" in privacy_source, "Plate coordinates must use normalized image orientation"
+assert "ImageFilter.GaussianBlur" in privacy_source and "Image.Resampling.NEAREST" in privacy_source
+assert "source.with_name" in privacy_source, "Redaction must write a separate copy instead of overwriting the original"
+assert "path.unlink()" in privacy_source, "Failed redaction copies must be cleaned up"
+assert "needs_review and not plates" in privacy_source, "Uncertain detections without a usable box must fail closed"
+
+detector_path = root / "app" / "ai" / "gemini.py"
+detector_source = detector_path.read_text(encoding="utf-8")
+detector_tree = ast.parse(detector_source, filename=str(detector_path))
+detector_functions = {
+    node.name: node for node in ast.walk(detector_tree)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+}
+assert "detect_license_plates" in detector_functions
+plate_detector_source = ast.get_source_segment(detector_source, detector_functions["detect_license_plates"])
+assert "needs_review" in plate_detector_source and "x1" in plate_detector_source
+assert "Não transcreva" in plate_detector_source, "The detector must localize plates without reading their characters"
+assert "json.loads" in plate_detector_source and "range(1, len(paths) + 1)" in plate_detector_source
+
+dashboard_route_source = ast.get_source_segment(source, function_nodes["dashboard"])
+assert "create_plate_safe_copies" in dashboard_route_source, "New uploads must be processed before creating a post"
+assert "before_images_original" in dashboard_route_source and "after_images_original" in dashboard_route_source
+assert "Vídeos" in dashboard_route_source, "Video uploads must be blocked until video-frame redaction exists"
+preflight_source = ast.get_source_segment(source, function_nodes["_preflight_selected_platforms"])
+assert 'str(post.get("plate_redaction_version", "")) != "1"' in preflight_source, "Legacy posts without redaction must not publish"
+assert "plate_redaction_version" in ast.get_source_segment(source, function_nodes["publication_confirmation_fingerprint"])
+
+dashboard_template_path = root / "app" / "templates" / "dashboard.html"
+dashboard_template = dashboard_template_path.read_text(encoding="utf-8")
+review_template_path = root / "app" / "templates" / "review_pending.html"
+review_template = review_template_path.read_text(encoding="utf-8")
+confirm_template_path = root / "app" / "templates" / "confirm_platform_publication.html"
+confirm_template = confirm_template_path.read_text(encoding="utf-8")
+for content, label in (
+    (dashboard_template, "dashboard"),
+    (review_template, "review pending"),
+    (confirm_template, "publication confirmation"),
+):
+    Environment().parse(content)
+    assert "plate_redaction_message" in content, f"{label} template must show the plate-redaction status"
+assert 'accept="image/jpeg,image/png,image/webp"' in dashboard_template
+assert "Vídeos serão liberados" in dashboard_template
+
+print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy safeguards, and Jinja templates.")
