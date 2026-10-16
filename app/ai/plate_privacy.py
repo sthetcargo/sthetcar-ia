@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+INSTAGRAM_IMAGE_SIZE = 1080
+PUBLICATION_BACKGROUND = (32, 34, 38)
 
 
 class PlatePrivacyError(RuntimeError):
@@ -29,16 +31,33 @@ def _detect_license_plates(paths):
 
 
 def _save_normalized_image(image, destination):
-    extension = destination.suffix.lower()
+    """Save an Instagram-compatible square JPEG without cropping the source."""
+    destination = Path(destination)
     image = image.convert("RGB")
-    if extension in {".jpg", ".jpeg"}:
-        image.save(destination, format="JPEG", quality=92, optimize=True)
-    elif extension == ".png":
-        image.save(destination, format="PNG", optimize=True)
-    elif extension == ".webp":
-        image.save(destination, format="WEBP", quality=92, method=6)
-    else:
-        raise PlatePrivacyError("Formato de imagem não suportado pela proteção de placas.")
+    image.thumbnail(
+        (INSTAGRAM_IMAGE_SIZE, INSTAGRAM_IMAGE_SIZE),
+        Image.Resampling.LANCZOS,
+    )
+
+    # Use a solid background, not a blurred copy of the photo: that avoids
+    # accidentally leaving a readable plate visible in a background effect.
+    canvas = Image.new(
+        "RGB",
+        (INSTAGRAM_IMAGE_SIZE, INSTAGRAM_IMAGE_SIZE),
+        PUBLICATION_BACKGROUND,
+    )
+    offset = (
+        (INSTAGRAM_IMAGE_SIZE - image.width) // 2,
+        (INSTAGRAM_IMAGE_SIZE - image.height) // 2,
+    )
+    canvas.paste(image, offset)
+    canvas.save(
+        destination,
+        format="JPEG",
+        quality=88,
+        optimize=True,
+        progressive=True,
+    )
 
 
 def _normalized_copy(source):
@@ -47,16 +66,19 @@ def _normalized_copy(source):
         raise PlatePrivacyError(
             "A proteção automática de placas funciona apenas com JPG, JPEG, PNG ou WEBP."
         )
-    destination = source.with_name(f"{source.stem}_placa_protegida{source.suffix.lower()}")
+    # Always use .jpg for publication: the Instagram image API requires JPEG,
+    # and every image must have a supported ratio. The original remains intact.
+    destination = source.with_name(f"{source.stem}_placa_protegida.jpg")
     try:
         with Image.open(source) as opened:
-            normalized = ImageOps.exif_transpose(opened)
+            normalized = ImageOps.exif_transpose(opened).convert("RGB")
             _save_normalized_image(normalized, destination)
     except PlatePrivacyError:
         raise
     except Exception as exc:
         raise PlatePrivacyError(
-            "Não foi possível preparar uma cópia segura de uma das fotos. Os originais foram preservados."
+            "Não foi possível preparar uma cópia segura e compatível de uma das fotos. "
+            "Os originais foram preservados."
         ) from exc
     return destination
 
