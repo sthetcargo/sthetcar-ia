@@ -535,9 +535,13 @@ def _parse_plate_detection_json(raw):
     text = (raw or "").strip()
     if not text:
         raise RuntimeError("O detector de placas não retornou uma resposta.")
-    # Tolerate a surrounding Markdown fence from older/model-specific responses,
+    # Tolerate a Markdown-fenced JSON object from older/model-specific responses,
     # but don't extract arbitrary braces from natural-language prose.
-    text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text, flags=re.IGNORECASE).strip()
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    else:
+        text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text, flags=re.IGNORECASE).strip()
     try:
         payload = json.loads(text)
     except (TypeError, ValueError) as exc:
