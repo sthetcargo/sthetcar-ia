@@ -93,13 +93,18 @@ def _generate(client, contents, temperature, max_output_tokens):
     last_error = None
     for model in _models_to_try():
         try:
+            # Gemini 3.6+ and Gemini 4 ignore custom sampling settings and
+            # current API guidance says not to send a non-default temperature.
+            # Keep existing tuning only for older model families.
+            config_options = {"max_output_tokens": max_output_tokens}
+            normalized_model = model.strip().lower()
+            if not normalized_model.startswith(("gemini-3", "gemini-4")):
+                config_options["temperature"] = temperature
+
             response = client.models.generate_content(
                 model=model,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_output_tokens,
-                ),
+                config=types.GenerateContentConfig(**config_options),
             )
             return response, model
         except Exception as exc:
