@@ -3,9 +3,14 @@
 The original uploads are never overwritten. Detection failures are fail-closed, and
 the caller must keep a human-review step because vision models can miss plates.
 """
+import logging
+import secrets
 from pathlib import Path
 
 from PIL import Image, ImageFilter, ImageOps
+
+
+logger = logging.getLogger(__name__)
 
 
 SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -168,7 +173,16 @@ def create_plate_safe_copies(source_paths):
                 pass
         if isinstance(exc, PlatePrivacyError):
             raise
+        diagnostic_id = "PLATE-" + secrets.token_hex(4).upper()
+        # Keep the underlying exception in Render logs only; do not expose provider
+        # diagnostics, request details, or credentials in the browser message.
+        logger.exception(
+            "Falha inesperada na proteção automática de placas [%s] (%s)",
+            diagnostic_id,
+            type(exc).__name__,
+        )
         raise PlatePrivacyError(
-            "Não foi possível verificar as placas com segurança. As fotos originais foram preservadas "
-            "e nenhum post foi criado. Tente novamente em instantes."
+            "Não foi possível verificar as placas com segurança. Nenhum post foi criado. "
+            "As fotos no seu dispositivo não foram alteradas; selecione-as novamente para tentar. "
+            f"Código de diagnóstico: {diagnostic_id}."
         ) from exc
