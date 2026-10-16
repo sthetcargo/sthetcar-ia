@@ -98,6 +98,19 @@ def _fallback_caption(analysis: str, vehicle: str = "", service: str = ""):
     )
 
 
+def _generation_config(model, temperature, max_output_tokens):
+    """Build model-compatible generation settings without network access.
+
+    Gemini 3.x and 4.x require sampling parameters to remain at API defaults;
+    older model families retain the application's existing temperature tuning.
+    """
+    normalized_model = str(model or "").strip().lower().removeprefix("models/")
+    options = {"max_output_tokens": max_output_tokens}
+    if not normalized_model.startswith(("gemini-3", "gemini-4")):
+        options["temperature"] = temperature
+    return types.GenerateContentConfig(**options)
+
+
 def _generate(client, contents, temperature, max_output_tokens):
     last_error = None
     for model in _models_to_try():
@@ -107,10 +120,7 @@ def _generate(client, contents, temperature, max_output_tokens):
             response = client.models.generate_content(
                 model=model,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_output_tokens,
-                ),
+                config=_generation_config(model, temperature, max_output_tokens),
             )
             logger.info(
                 "Gemini generation completed model=%s elapsed_seconds=%.1f",
