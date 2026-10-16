@@ -10,7 +10,7 @@ class GeminiGenerationConfigTests(unittest.TestCase):
         self.assertEqual(config.max_output_tokens, 1400)
         self.assertIsNone(config.temperature)
 
-    def test_gemini_35_flashiite_uses_api_default_sampling(self):
+    def test_gemini_35_flash_lite_uses_api_default_sampling(self):
         config = _generation_config("models/gemini-3.5-flash-lite", 0.65, 1400)
         self.assertIsNone(config.temperature)
 
