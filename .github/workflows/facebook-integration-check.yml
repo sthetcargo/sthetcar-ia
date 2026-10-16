@@ -20,9 +20,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14.3"
       - name: Install template parser and image processor
-        run: python -m pip install --disable-pip-version-check Jinja2 "Pillow>=10.0,<13.0"
+        run: python -m pip install --disable-pip-version-check Jinja2 "Pillow>=10.0,<13.0" "google-genai>=1.0.0" "python-dotenv>=1.0.0"
       - name: Compile Python source
         run: python -m py_compile app/main.py app/ai/gemini.py app/ai/plate_privacy.py app/time_utils.py gunicorn.conf.py
       - name: Run offline plate-privacy unit tests
