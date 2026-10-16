@@ -34,9 +34,10 @@ def _save_normalized_image(image, destination):
     """Save an Instagram-compatible square JPEG without cropping the source."""
     destination = Path(destination)
     image = image.convert("RGB")
-    image.thumbnail(
+    image = ImageOps.contain(
+        image,
         (INSTAGRAM_IMAGE_SIZE, INSTAGRAM_IMAGE_SIZE),
-        Image.Resampling.LANCZOS,
+        method=Image.Resampling.LANCZOS,
     )
 
     # Use a solid background, not a blurred copy of the photo: that avoids
