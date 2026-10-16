@@ -50,7 +50,7 @@
 {% if pending %}
 {% for item in pending %}
 <article class="item">
-<div class="item-head"><div><div class="meta"><span class="status pending">APROVADO · AGUARDANDO</span><span>{{ item.approved_at.replace('T',' ') if item.approved_at else 'Data não informada' }}</span></div><div class="vehicle">{{ item.vehicle or 'Veículo não informado' }}</div><div class="service">{{ item.service or 'Serviço não informado' }}</div></div><a class="btn primary" href="{{ url_for('instagram_central', post=item.index) }}">📲 Abrir publicação</a></div>
+<div class="item-head"><div><div class="meta"><span class="status pending">APROVADO · AGUARDANDO</span><span>{{ item.approved_at|local_datetime if item.approved_at else 'Data não informada' }}</span></div><div class="vehicle">{{ item.vehicle or 'Veículo não informado' }}</div><div class="service">{{ item.service or 'Serviço não informado' }}</div></div><a class="btn primary" href="{{ url_for('instagram_central', post=item.index) }}">📲 Abrir publicação</a></div>
 <p class="caption">{{ item.caption }}</p>
 
 <form class="queue-form" method="post" action="{{ url_for('edit_publication_queue') }}" onsubmit="return syncOrder(this)"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -74,11 +74,11 @@
 <section class="card">
 <div class="section-head"><h2>🟢 Publicados</h2><span class="count">{{ published|length }} concluído{{ '' if published|length == 1 else 's' }}</span></div>
 {% if published %}
-{% for item in published %}<article class="item"><div class="item-head"><div><div class="meta"><span class="status published">✓ PUBLICADO</span><span>{{ item.publication.published_at.replace('T',' ') if item.publication.published_at else 'Data não informada' }}</span></div><div class="vehicle">{{ item.vehicle or 'Veículo não informado' }}</div><div class="service">{{ item.service or 'Serviço não informado' }}</div></div><a class="btn secondary" href="{{ url_for('instagram_central', post=item.index) }}">👀 Ver publicação</a></div><p class="caption">{{ item.caption }}</p>{% if item.publication.media_id %}<div class="save-note">🆔 ID Instagram: {{ item.publication.media_id }}</div>{% endif %}</article>{% endfor %}
+{% for item in published %}<article class="item"><div class="item-head"><div><div class="meta"><span class="status published">✓ PUBLICADO</span><span>{{ item.publication.published_at|local_datetime if item.publication.published_at else 'Data não informada' }}</span></div><div class="vehicle">{{ item.vehicle or 'Veículo não informado' }}</div><div class="service">{{ item.service or 'Serviço não informado' }}</div></div><a class="btn secondary" href="{{ url_for('instagram_central', post=item.index) }}">👀 Ver publicação</a></div><p class="caption">{{ item.caption }}</p>{% if item.publication.media_id %}<div class="save-note">🆔 ID Instagram: {{ item.publication.media_id }}</div>{% endif %}</article>{% endfor %}
 {% else %}<div class="empty">Ainda não há publicações concluídas.</div>{% endif %}
 </section>
 
-{% if discarded %}<section class="card"><div class="section-head"><h2>⚪ Descartados</h2><span class="count">{{ discarded|length }}</span></div>{% for item in discarded %}<div class="discarded-row"><div><strong>{{ item.vehicle or 'Veículo não informado' }} · {{ item.service or 'Serviço não informado' }}</strong><small>Aprovado em {{ item.approved_at.replace('T',' ') if item.approved_at else 'data não informada' }}</small></div><span class="status discarded">DESCARTADO</span></div>{% endfor %}</section>{% endif %}
+{% if discarded %}<section class="card"><div class="section-head"><h2>⚪ Descartados</h2><span class="count">{{ discarded|length }}</span></div>{% for item in discarded %}<div class="discarded-row"><div><strong>{{ item.vehicle or 'Veículo não informado' }} · {{ item.service or 'Serviço não informado' }}</strong><small>Aprovado em {{ item.approved_at|local_datetime if item.approved_at else 'data não informada' }}</small></div><span class="status discarded">DESCARTADO</span></div>{% endfor %}</section>{% endif %}
 </main>
 <script>
 let dragged=null;
