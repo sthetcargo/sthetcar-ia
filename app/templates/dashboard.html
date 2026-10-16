@@ -190,6 +190,7 @@
                 <div class="queue-top"><span>{{ item.created_at.replace('T',' ') }}</span><strong>AGUARDANDO APROVAÇÃO</strong></div>
                 <h4>{{ item.vehicle or 'Veículo a confirmar' }}</h4>
                 <div class="queue-service">{{ item.service or 'Serviço a confirmar' }}</div>
+                {% if item.plate_redaction_message %}<p style="font-size:11px;color:#72510b;background:#fff7df;border-radius:8px;padding:8px">🛡️ {{ item.plate_redaction_message }}</p>{% else %}<p style="font-size:11px;color:#72510b;background:#fff7df;border-radius:8px;padding:8px">Este rascunho é anterior à proteção automática de placas; a publicação ficará bloqueada.</p>{% endif %}
                 <p>{{ item.caption }}</p>
                 <a class="btn primary" style="text-decoration:none;display:inline-flex" href="{{ url_for('review_pending', pending_id=item.pending_id) }}">👀 Revisar e aprovar</a>
               </div>
@@ -222,15 +223,15 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="generate">
         <div class="upload-grid">
-          <div class="upload-box"><label><span class="upload-icon">📸</span><span>Mídia ANTES</span><small>Até 6 fotos ou vídeos</small></label><input type="file" name="before" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple required><div id="beforePreview" class="thumb-grid"></div><div class="photo-count" id="beforeCount">0/6 arquivos</div><div class="upload-total" id="beforeSize"><strong>0 MB</strong></div></div>
-          <div class="upload-box"><label><span class="upload-icon">✨</span><span>Mídia DEPOIS</span><small>Até 6 fotos ou vídeos</small></label><input type="file" name="after" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple required><div id="afterPreview" class="thumb-grid"></div><div class="photo-count" id="afterCount">0/6 arquivos</div><div class="upload-total" id="afterSize"><strong>0 MB</strong></div></div>
+          <div class="upload-box"><label><span class="upload-icon">📸</span><span>Mídia ANTES</span><small>Até 6 fotos</small></label><input type="file" name="before" accept="image/jpeg,image/png,image/webp" multiple required><div id="beforePreview" class="thumb-grid"></div><div class="photo-count" id="beforeCount">0/6 arquivos</div><div class="upload-total" id="beforeSize"><strong>0 MB</strong></div></div>
+          <div class="upload-box"><label><span class="upload-icon">✨</span><span>Mídia DEPOIS</span><small>Até 6 fotos</small></label><input type="file" name="after" accept="image/jpeg,image/png,image/webp" multiple required><div id="afterPreview" class="thumb-grid"></div><div class="photo-count" id="afterCount">0/6 arquivos</div><div class="upload-total" id="afterSize"><strong>0 MB</strong></div></div>
         </div>
         <div class="form-grid">
           <div class="field"><label>🚘 Veículo <span class="optional">(opcional)</span></label><input type="text" name="vehicle" placeholder="Ex.: Honda Civic 2020"></div>
           <div class="field"><label>🔧 Serviço realizado <span class="optional">(opcional)</span></label><input type="text" name="service" placeholder="Ex.: Polimento técnico"></div>
           <div class="field full"><label>📝 Observações <span class="optional">(opcional)</span></label><textarea name="notes" placeholder="Ex.: foco na remoção de manchas dos bancos e acabamento final"></textarea><div class="hint">Quanto mais contexto você fornecer, mais específica poderá ser a legenda.</div></div>
         </div>
-        <div class="upload-total" id="totalSize"><strong>0 MB</strong> selecionados — limite recomendado 30 MB</div><div class="compress-note">🛡️ As fotos são reduzidas no seu navegador; vídeos MP4/MOV são enviados sem recompressão. Limite total de 30 MB por análise.</div><div class="upload-progress" id="uploadProgress">Preparando fotos…</div><div class="actions"><button class="btn primary" id="generateBtn" type="submit">✨ Analisar fotos e gerar post</button><span class="small">A IA não publica nada automaticamente.</span></div>
+        <div class="upload-total" id="totalSize"><strong>0 MB</strong> selecionados — limite recomendado 30 MB</div><div class="compress-note">🛡️ A proteção automática de placas funciona nesta versão com fotos JPG, JPEG, PNG ou WEBP. Os originais são preservados e as cópias borradas são usadas na prévia e na publicação. Vídeos serão liberados após receberem tratamento de placas.</div><div class="upload-progress" id="uploadProgress">Preparando fotos…</div><div class="actions"><button class="btn primary" id="generateBtn" type="submit">✨ Analisar fotos e gerar post</button><span class="small">A IA não publica nada automaticamente.</span></div>
       </form>
     </section>
 
@@ -268,6 +269,7 @@
             </div>
           </div>
 
+          <div style="grid-column:1 / -1;background:#fff7df;border:1px solid #ead49a;color:#72510b;border-radius:12px;padding:13px;line-height:1.5">🛡️ <strong>Proteção automática de placas:</strong> {{ result.plate_redaction_message }} Os originais foram preservados; revise cada prévia com atenção antes de aprovar.</div>
           <div class="review-editor">
             <div class="editor-card">
               <form method="post" id="approvalForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

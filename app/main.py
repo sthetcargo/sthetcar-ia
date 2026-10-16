@@ -16,6 +16,7 @@ from flask import Flask, render_template, request, url_for, redirect, session, a
 from werkzeug.utils import secure_filename
 
 from app.ai.vision import analyze_before_after
+from app.ai.plate_privacy import create_plate_safe_copies
 from app.ai.copywriter import generate_post
 from app.ai.gemini import rewrite_caption
 from app.storage import (
@@ -1377,6 +1378,10 @@ def dashboard():
             vehicle = request.form.get("vehicle", "").strip()
             service = request.form.get("service", "").strip()
             pending_id = request.form.get("pending_id", "").strip()
+            approved_pending = next(
+                (item for item in approval_queue if pending_id and item.get("pending_id") == pending_id),
+                {},
+            )
 
             if not vehicle:
                 error = "Informe o veÃ­culo antes de aprovar o conteÃºdo."
@@ -1416,6 +1421,15 @@ def dashboard():
                     "vehicle": request.form.get("vehicle", "").strip(),
                     "service": request.form.get("service", "").strip(),
                     "analysis": request.form.get("analysis", "").strip(),
+                    # Keep the source originals for archival, but only the processed
+                    # before_images/after_images are eligible for publication.
+                    "before_images_original": list(approved_pending.get("before_images_original") or []),
+                    "after_images_original": list(approved_pending.get("after_images_original") or []),
+                    "plate_redaction_version": approved_pending.get("plate_redaction_version", 0),
+                    "plate_redaction_count": approved_pending.get("plate_redaction_count", 0),
+                    "plate_redaction_image_count": approved_pending.get("plate_redaction_image_count", 0),
+                    "plate_redaction_review_required": bool(approved_pending.get("plate_redaction_review_required", False)),
+                    "plate_redaction_message": approved_pending.get("plate_redaction_message", ""),
                 }
                 history.insert(0, history_item)
                 save_history(history)
@@ -1436,7 +1450,9 @@ def dashboard():
             elif len(before_files) > MAX_PHOTOS_PER_SIDE or len(after_files) > MAX_PHOTOS_PER_SIDE:
                 error = f"Você pode enviar até {MAX_PHOTOS_PER_SIDE} arquivos em cada lado."
             elif any(not allowed(f.filename) for f in before_files + after_files):
-                error = "Use JPG, JPEG, PNG, WEBP, MP4 ou MOV."
+                error = "Use JPG, JPEG, PNG ou WEBP."
+            elif any(is_video_file(f.filename) for f in before_files + after_files):
+                error = "A proteção automática de placas nesta versão funciona apenas com fotos. Selecione JPG, JPEG, PNG ou WEBP; o tratamento de vídeos será adicionado posteriormente."
             elif any(is_video_file(f.filename) and (getattr(f, "content_length", None) or 0) > MAX_VIDEO_BYTES for f in before_files + after_files):
                 error = "Cada vídeo deve ter no máximo 20 MB."
             elif request.content_length and request.content_length > app.config["MAX_CONTENT_LENGTH"]:
@@ -1444,7 +1460,9 @@ def dashboard():
             else:
                 stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                 before_paths, after_paths = [], []
+                safe_paths = []
                 before_urls, after_urls = [], []
+                before_original_urls, after_original_urls = [], []
                 try:
                     for idx, file in enumerate(before_files, 1):
                         name = f"{stamp}_antes_{idx}_{secure_filename(file.filename)}"
@@ -1465,11 +1483,21 @@ def dashboard():
                     if total_saved > MAX_TOTAL_UPLOAD_BYTES:
                         raise RuntimeError(f"As mídias ficaram em {total_saved / (1024 * 1024):.1f} MB. O limite total é de 30 MB.")
 
+                    # Create separate, orientation-normalized copies; never overwrite originals.
+                    # If detection or coordinate validation fails, content generation stops safely.
+                    safe_paths, plate_redaction = create_plate_safe_copies(before_paths + after_paths)
+                    safe_before_paths = safe_paths[:len(before_paths)]
+                    safe_after_paths = safe_paths[len(before_paths):]
+
                     analysis = analyze_before_after(
                         before_paths, after_paths, vehicle, service, notes
                     )
-                    before_urls = [_remote_ref_for_local(path, "before") for path in before_paths]
-                    after_urls = [_remote_ref_for_local(path, "after") for path in after_paths]
+                    # Preserve originals in storage for future re-editing, but point all previews
+                    # and publication flows at the redacted copies only.
+                    before_original_urls = [_remote_ref_for_local(path, "before") for path in before_paths]
+                    after_original_urls = [_remote_ref_for_local(path, "after") for path in after_paths]
+                    before_urls = [_remote_ref_for_local(path, "before") for path in safe_before_paths]
+                    after_urls = [_remote_ref_for_local(path, "after") for path in safe_after_paths]
                     # If the user left these fields blank, use only conservative
                     # labels that are explicitly supported by the visual analysis.
                     resolved_vehicle = vehicle or infer_vehicle(analysis)
@@ -1484,6 +1512,9 @@ def dashboard():
                         "hashtags": hashtags,
                         "before_images": before_urls,
                         "after_images": after_urls,
+                        "before_images_original": before_original_urls,
+                        "after_images_original": after_original_urls,
+                        **plate_redaction,
                         "before_image": before_urls[0],
                         "after_image": after_urls[0],
                         "vehicle": resolved_vehicle,
@@ -1499,7 +1530,7 @@ def dashboard():
                     save_approval_queue(approval_queue)
                     result["pending_id"] = pending["pending_id"]
                 except Exception as exc:
-                    for path in before_paths + after_paths:
+                    for path in before_paths + after_paths + safe_paths:
                         try:
                             if path.exists():
                                 path.unlink()
@@ -1974,6 +2005,7 @@ def publication_confirmation_fingerprint(post):
         "approved_at", "vehicle", "service", "caption", "hashtags",
         "before_image", "after_image", "before_images", "after_images",
     )
+    fields = fields + ("plate_redaction_version", "plate_redaction_count")
     payload = {field: post.get(field) for field in fields}
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -1988,6 +2020,11 @@ def _preflight_selected_platforms(post_index, selected):
     post = history[post_index]
     if not publication_key(post):
         raise RuntimeError("O post aprovado não tem uma identificação estável para confirmação.")
+    if str(post.get("plate_redaction_version", "")) != "1":
+        raise RuntimeError(
+            "Este post foi criado antes da proteção automática de placas. Para publicar com segurança, "
+            "crie novamente o conteúdo com as fotos e revise as cópias protegidas antes de confirmar."
+        )
     if "instagram" in selected:
         preflight_instagram_for_post(post_index)
     if "facebook" in selected:

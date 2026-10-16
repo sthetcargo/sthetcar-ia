@@ -44,6 +44,7 @@ button:disabled{opacity:.65;cursor:wait}
   <section class="card">
     <h2>Post que será publicado</h2>
     <p><strong>{{ post.vehicle or 'Veículo não informado' }}</strong> · {{ post.service or 'Serviço não informado' }}</p>
+    <div class="notice" role="note">🛡️ <strong>Privacidade das placas:</strong> {{ post.plate_redaction_message }} Revise visualmente todas as fotos antes de confirmar. A detecção automática pode não localizar placas muito pequenas, distantes ou parcialmente ocultas.</div>
     <div class="photos">
       <div>
         <p class="photo-label">ANTES</p>
