@@ -373,7 +373,7 @@ assert "test_uncertain_vehicle_is_not_inferred_from_placeholder" in (root / "tes
 
 # Portuguese text should be UTF-8, not UTF-8 bytes misread as Latin-1.
 mojibake_markers = ("Ã£", "Ã§", "Ã©", "Ã­", "Ã¡", "Ã³", "Ãº", "Ãª", "Ãµ", "Ã", "â€”", "â€“", "â€™")
-for relative_path in ("app/main.py", "app/ai/text_inference.py", "README.md"):
+for relative_path in ("app/main.py", "app/ai/text_inference.py", "migrar_v33_para_nuvem.py", "README.md"):
     content = (root / relative_path).read_text(encoding="utf-8")
     assert not any(marker in content for marker in mojibake_markers), f"Corrupted Portuguese encoding remains in {relative_path}"
 
