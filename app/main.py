@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime
+from app.time_utils import format_local_datetime
 import copy
 import difflib
 import json
@@ -42,6 +43,7 @@ for folder in (BEFORE_DIR, AFTER_DIR, GENERATED_DIR):
     folder.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
+app.add_template_filter(format_local_datetime, "local_datetime")
 
 PUBLICATION_AUDIT_FILE = BASE_DIR / "generated" / "publicacoes_instagram.json"
 
