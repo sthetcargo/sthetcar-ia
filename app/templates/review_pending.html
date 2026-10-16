@@ -58,6 +58,7 @@
   </div></div>
   <div class="carousel-preview"><h3>📲 Sequência do carrossel no Instagram</h3><div class="carousel-strip" id="carousel-preview"></div></div>
   <div class="warning">💡 <strong>Você controla a ordem.</strong> Arraste as fotos para mudar a posição. A sequência aprovada será preservada até a fila e a publicação.</div>
+{% if result.plate_redaction_version == 1 %}<div class="warning" role="note">🛡️ <strong>Proteção automática de placas:</strong> {{ result.plate_redaction_message }} Revise cada foto; a detecção automática pode falhar.</div>{% else %}<div class="warning" role="alert">⚠️ Este rascunho é anterior à proteção automática de placas. A publicação ficará bloqueada; gere um novo post com as fotos para criar cópias protegidas.</div>{% endif %}
 </section>
 <section class="card">
   <h2>Revisão e aprovação</h2>
