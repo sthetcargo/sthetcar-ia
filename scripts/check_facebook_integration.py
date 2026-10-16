@@ -247,4 +247,16 @@ for content, label in (
 assert 'accept="image/jpeg,image/png,image/webp"' in dashboard_template
 assert "Vídeos serão liberados" in dashboard_template
 
-print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy safeguards, and Jinja templates.")
+# The pending-review page must support enlarging processed photos without changing
+# hidden post fields or bypassing the approval/publication safeguards.
+assert 'id="photo-lightbox"' in review_template, "Review page needs a photo lightbox"
+assert "zoomablePhotoSelector" in review_template and "enhanceZoomablePhotos()" in review_template
+assert "openPhotoLightbox(img)" in review_template and "closePhotoLightbox()" in review_template
+assert "event.key==='Escape'" in review_template, "Lightbox must close with Escape"
+assert "event.key==='Enter' || event.key===' '" in review_template, "Zoomable photos must be keyboard accessible"
+assert "currentSrc || img.src" in review_template, "Lightbox must show the actual processed preview"
+assert "Clique ou toque em qualquer foto para ampliar" in review_template
+assert 'id="approval-form"' in review_template and 'name="action" value="approve"' in review_template
+assert 'name="action" value="publish"' not in review_template, "Photo zoom must not add publication controls"
+
+print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, and Jinja templates.")
