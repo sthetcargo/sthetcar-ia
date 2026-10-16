@@ -366,7 +366,7 @@ inference_functions = {
 }
 assert {"infer_vehicle", "infer_service"} <= set(inference_functions)
 assert "from app.ai.text_inference import infer_service, infer_vehicle" in source
-assert "VE[IÍ]CULO\\\\s+IDENTIFICADO" not in inference_source or "VE[IÍ]CULO\\\\s+IDENTIFICADO" in inference_source
+assert 'r"VE[IÍ]CULO\\s+IDENTIFICADO' in inference_source
 assert "não identificado" in inference_source
 assert "Lavagem e Higienização" in inference_source
 assert "test_uncertain_vehicle_is_not_inferred_from_placeholder" in (root / "tests" / "test_text_inference.py").read_text(encoding="utf-8")
