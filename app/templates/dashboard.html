@@ -297,27 +297,27 @@
     <section class="card" id="historico">
       <div class="history-header">
         <div><h3>📚 Histórico de posts aprovados</h3><p>Consulte, pesquise e reutilize os conteúdos que você já aprovou.</p></div>
-        <span class="history-count">{{ history|length }} {{ 'post aprovado' if history|length == 1 else 'posts aprovados' }}</span>
+        <span class="history-count">{{ dashboard_history|length }} {{ 'post aprovado' if history|length == 1 else 'posts aprovados' }}</span>
       </div>
-      {% if history %}
+      {% if dashboard_history %}
         {% set total_images = namespace(value=0) %}
-        {% for item in history %}
+        {% for item in dashboard_history %}
           {% set total_images.value = total_images.value + (item.before_images|length if item.before_images else (1 if item.before_image else 0)) + (item.after_images|length if item.after_images else (1 if item.after_image else 0)) %}
         {% endfor %}
         <div class="history-summary">
-          <div class="summary-box"><small>Posts aprovados</small><strong>{{ history|length }}</strong></div>
+          <div class="summary-box"><small>Posts aprovados</small><strong>{{ dashboard_history|length }}</strong></div>
           <div class="summary-box"><small>Fotos arquivadas</small><strong>{{ total_images.value }}</strong></div>
-          <div class="summary-box"><small>Último veículo</small><strong>{{ history[0].vehicle or '—' }}</strong></div>
+          <div class="summary-box"><small>Último veículo</small><strong>{{ dashboard_history[0].vehicle or '—' }}</strong></div>
         </div>
         <div class="history-tools">
           <input id="historySearch" class="history-search" type="search" placeholder="🔎 Buscar por veículo, serviço ou legenda...">
-          <select id="historyFilter" class="history-filter"><option value="all">Todos os serviços</option>{% for service in history|map(attribute='service')|select|unique|sort %}<option value="{{ service|lower }}">{{ service }}</option>{% endfor %}</select>
-          <div id="historyResults" class="history-results">{{ history|length }} resultado(s)</div>
+          <select id="historyFilter" class="history-filter"><option value="all">Todos os serviços</option>{% for service in dashboard_history|map(attribute='service')|select|unique|sort %}<option value="{{ service|lower }}">{{ service }}</option>{% endfor %}</select>
+          <div id="historyResults" class="history-results">{{ dashboard_history|length }} resultado(s)</div>
         </div>
       {% endif %}
-      {% if history %}
+      {% if dashboard_history %}
         <div class="history-grid">
-          {% for item in history %}
+          {% for item in dashboard_history %}
             <article class="history-item" data-search="{{ ((item.vehicle or '') ~ ' ' ~ (item.service or '') ~ ' ' ~ (item.caption or '') ~ ' ' ~ (item.hashtags or ''))|lower }}" data-service="{{ (item.service or '')|lower }}">
               {% if item.before_image or item.after_image %}
                 <div class="history-images multi-history">
@@ -344,7 +344,7 @@
                 <div class="history-actions">
                   <button type="button" class="history-action toggle-details">Ver legenda completa</button>
                   <button type="button" class="history-action copy-caption" data-caption="{{ item.caption|e }}">Copiar legenda</button>
-                  <a class="history-action" style="text-decoration:none;display:inline-flex;align-items:center" href="{{ url_for('instagram_central', post=loop.index0) }}">📲 Preparar para Instagram</a>
+                  <a class="history-action" style="text-decoration:none;display:inline-flex;align-items:center" href="{{ url_for('instagram_central', post=item.history_index) }}">📲 Preparar para Instagram</a>
                 </div>
               </div>
             </article>
@@ -353,7 +353,11 @@
         <div id="noHistoryResults" class="no-history-results">Nenhum post encontrado com esses filtros.</div>
         <div class="history-note">🔒 O histórico e o dashboard são salvos localmente neste computador. Publicações reais aparecem como PUBLICADO após confirmação no Instagram.</div>
       {% else %}
-        <div class="history-empty"><strong>Nenhum post aprovado ainda.</strong>Quando você aprovar seu primeiro conteúdo, ele aparecerá aqui automaticamente.</div>
+        {% if history %}
+          <div class="history-empty"><strong>Nenhum post aprovado ativo na lista.</strong>Os posts descartados foram retirados desta lista, mas continuam registrados na seção “Descartados” da fila de publicações.</div>
+        {% else %}
+          <div class="history-empty"><strong>Nenhum post aprovado ainda.</strong>Quando você aprovar seu primeiro conteúdo, ele aparecerá aqui automaticamente.</div>
+        {% endif %}
       {% endif %}
     </section>
   </main>
