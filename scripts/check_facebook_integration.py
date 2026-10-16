@@ -326,4 +326,33 @@ assert "draft.prepared_at.replace('T',' ')" not in instagram_template
 assert "item.created_at.replace('T',' ')" not in dashboard_template
 assert "item.publication.published_at.replace('T',' ')" not in publication_queue_template
 
-print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, Brasília timezone formatting, and Jinja templates.")
+
+# The Gunicorn sync-worker default is 30 seconds. Keep AI image-generation requests
+# bounded but allow time for multiple external model calls in one post.
+gunicorn_config_path = root / "gunicorn.conf.py"
+gunicorn_source = gunicorn_config_path.read_text(encoding="utf-8")
+gunicorn_tree = ast.parse(gunicorn_source, filename=str(gunicorn_config_path))
+gunicorn_assignments = {
+    node.targets[0].id: node.value.value
+    for node in gunicorn_tree.body
+    if isinstance(node, ast.Assign)
+    and len(node.targets) == 1
+    and isinstance(node.targets[0], ast.Name)
+    and isinstance(node.value, ast.Constant)
+}
+assert gunicorn_assignments.get("timeout") == 180
+assert gunicorn_assignments.get("graceful_timeout") == 30
+
+gemini_path = root / "app" / "ai" / "gemini.py"
+gemini_source = gemini_path.read_text(encoding="utf-8")
+gemini_tree = ast.parse(gemini_source, filename=str(gemini_path))
+client_node = next(node for node in ast.walk(gemini_tree) if isinstance(node, ast.FunctionDef) and node.name == "_client")
+client_source = ast.get_source_segment(gemini_source, client_node)
+assert "types.HttpOptions(timeout=60_000)" in client_source, "Gemini HTTP call timeout must be explicit"
+generate_node = next(node for node in ast.walk(gemini_tree) if isinstance(node, ast.FunctionDef) and node.name == "_generate")
+generate_source = ast.get_source_segment(gemini_source, generate_node)
+assert "Gemini generation started model=%s" in generate_source
+assert "Gemini generation completed model=%s elapsed_seconds=%.1f" in generate_source
+assert "Gemini generation failed model=%s elapsed_seconds=%.1f error_type=%s" in generate_source
+
+print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, Brasília timezone formatting, Gemini request timing/timeouts, Gunicorn timeout configuration, and Jinja templates.")
