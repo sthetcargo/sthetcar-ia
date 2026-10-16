@@ -326,4 +326,20 @@ assert "draft.prepared_at.replace('T',' ')" not in instagram_template
 assert "item.created_at.replace('T',' ')" not in dashboard_template
 assert "item.publication.published_at.replace('T',' ')" not in publication_queue_template
 
-print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, Brasília timezone formatting, and Jinja templates.")
+
+# Gemini 3.6+ and Gemini 4 should keep sampling settings at the API default.
+gemini_path = root / "app" / "ai" / "gemini.py"
+gemini_source = gemini_path.read_text(encoding="utf-8")
+gemini_tree = ast.parse(gemini_source, filename=str(gemini_path))
+generate_node = next(
+    node for node in ast.walk(gemini_tree)
+    if isinstance(node, ast.FunctionDef) and node.name == "_generate"
+)
+generate_source = ast.get_source_segment(gemini_source, generate_node)
+assert 'config_options = {"max_output_tokens": max_output_tokens}' in generate_source
+assert 'if not normalized_model.startswith(("gemini-3", "gemini-4"))' in generate_source
+assert 'config_options["temperature"] = temperature' in generate_source
+assert "types.GenerateContentConfig(**config_options)" in generate_source
+assert "temperature=temperature," not in generate_source, "Do not force sampling temperature for Gemini 3/4"
+
+print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, Brasília timezone formatting, Gemini model-aware config, and Jinja templates.")
