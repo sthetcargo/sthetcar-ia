@@ -44,6 +44,18 @@
 }
 @media (min-width: 681px){.photo-move{display:none}}
 
+/* Photo lightbox for privacy review: open the actual processed image, not a new upload. */
+.zoom-help{margin:9px 2px 0;color:var(--muted);font-size:12px;line-height:1.45}
+.zoomable-photo{cursor:zoom-in;touch-action:manipulation}
+.zoomable-photo:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.photo-lightbox{display:none;position:fixed;inset:0;z-index:2000;background:rgba(8,10,14,.94);padding:24px;align-items:center;justify-content:center}
+.photo-lightbox.open{display:flex}
+.photo-lightbox-content{width:min(1200px,100%);height:min(92vh,900px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.photo-lightbox-content img{display:block;max-width:100%;max-height:calc(92vh - 54px);object-fit:contain;background:#111;border-radius:8px;box-shadow:0 12px 45px rgba(0,0,0,.5)}
+.photo-lightbox-caption{margin:0;color:#fff;text-align:center;font-size:13px;line-height:1.4}
+.photo-lightbox-close{position:absolute;top:14px;right:18px;width:46px;height:46px;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:rgba(0,0,0,.45);color:#fff;font-size:30px;line-height:1;cursor:pointer}
+.photo-lightbox-close:focus-visible{outline:3px solid #fff;outline-offset:3px}
+@media(max-width:620px){.photo-lightbox{padding:12px}.photo-lightbox-content{height:94vh}.photo-lightbox-content img{max-height:calc(94vh - 58px)}.photo-lightbox-close{top:8px;right:8px;width:42px;height:42px}}
 </style></head>
 <body><main class="shell">
 <header class="top"><div><div class="brand">🚗 Sthetcar AI</div><div class="sub">Revisão e organização antes da aprovação</div></div><span class="badge">🕐 AGUARDANDO APROVAÇÃO</span></header>
@@ -56,6 +68,7 @@
     <div class="side"><h4>ANTES</h4><div class="photos" id="before-preview">{% for image in result.before_images %}{% if image|is_video_media %}<video src="{{ image|media_url }}" controls muted playsinline></video>{% else %}<img src="{{ image|media_url }}" alt="Antes {{ loop.index }}">{% endif %}{% endfor %}</div></div>
     <div class="side"><h4>DEPOIS</h4><div class="photos" id="after-preview">{% for image in result.after_images %}{% if image|is_video_media %}<video src="{{ image|media_url }}" controls muted playsinline></video>{% else %}<img src="{{ image|media_url }}" alt="Depois {{ loop.index }}">{% endif %}{% endfor %}</div></div>
   </div></div>
+  <p class="zoom-help">🔎 Clique ou toque em qualquer foto para ampliar e conferir se a placa ficou totalmente ilegível.</p>
   <div class="carousel-preview"><h3>📲 Sequência do carrossel no Instagram</h3><div class="carousel-strip" id="carousel-preview"></div></div>
   <div class="warning">💡 <strong>Você controla a ordem.</strong> Arraste as fotos para mudar a posição. A sequência aprovada será preservada até a fila e a publicação.</div>
 {% if result.plate_redaction_version == 1 %}<div class="warning" role="note">🛡️ <strong>Proteção automática de placas:</strong> {{ result.plate_redaction_message }} Revise cada foto; a detecção automática pode falhar.</div>{% else %}<div class="warning" role="alert">⚠️ Este rascunho é anterior à proteção automática de placas. A publicação ficará bloqueada; gere um novo post com as fotos para criar cópias protegidas.</div>{% endif %}
@@ -66,11 +79,11 @@
     <input type="hidden" name="action" value="approve"><input type="hidden" name="pending_id" value="{{ result.pending_id }}"><input type="hidden" name="analysis" value="{{ result.analysis }}">
     <div class="row"><div class="field"><label>🚘 Veículo</label><input name="vehicle" value="{{ result.vehicle }}" required></div><div class="field"><label>🔧 Serviço</label><input name="service" value="{{ result.service }}" required></div></div>
 
-    <div class="editor-section"><h3>📷 Organizar fotos ANTES</h3><p>Arraste para mudar a ordem. Use ✕ para remover uma foto deste post.</p><div class="photo-editor" id="before-editor">
+    <div class="editor-section"><h3>📷 Organizar fotos ANTES</h3><p>Arraste para mudar a ordem. Use ✕ para remover uma foto deste post. Clique ou toque na foto para ampliar.</p><div class="photo-editor" id="before-editor">
       {% for image in result.before_images %}<div class="photo-item" draggable="true"><span class="photo-number">{{ loop.index }}</span><div class="photo-move"><button type="button" title="Mover para cima" data-move="-1">↑</button><button type="button" title="Mover para baixo" data-move="1">↓</button></div><button type="button" class="remove-photo" title="Remover foto">×</button>{% if image|is_video_media %}<video src="{{ image|media_url }}" muted playsinline controls></video>{% else %}<img src="{{ image|media_url }}" alt="Antes {{ loop.index }}">{% endif %}<input type="hidden" name="before_images" value="{{ image }}"><div class="photo-hint">Arraste</div></div>{% endfor %}
     </div></div>
 
-    <div class="editor-section"><h3>✨ Organizar fotos DEPOIS</h3><p>Arraste para mudar a ordem. Use ✕ para remover uma foto deste post.</p><div class="photo-editor" id="after-editor">
+    <div class="editor-section"><h3>✨ Organizar fotos DEPOIS</h3><p>Arraste para mudar a ordem. Use ✕ para remover uma foto deste post. Clique ou toque na foto para ampliar.</p><div class="photo-editor" id="after-editor">
       {% for image in result.after_images %}<div class="photo-item" draggable="true"><span class="photo-number">{{ loop.index }}</span><div class="photo-move"><button type="button" title="Mover para cima" data-move="-1">↑</button><button type="button" title="Mover para baixo" data-move="1">↓</button></div><button type="button" class="remove-photo" title="Remover foto">×</button>{% if image|is_video_media %}<video src="{{ image|media_url }}" muted playsinline controls></video>{% else %}<img src="{{ image|media_url }}" alt="Depois {{ loop.index }}">{% endif %}<input type="hidden" name="after_images" value="{{ image }}"><div class="photo-hint">Arraste</div></div>{% endfor %}
     </div></div>
 
@@ -138,7 +151,61 @@
     </form>
   </div>
 </section></div></main>
+<div id="photo-lightbox" class="photo-lightbox" aria-hidden="true">
+  <button type="button" class="photo-lightbox-close" id="photo-lightbox-close" aria-label="Fechar foto ampliada">×</button>
+  <div class="photo-lightbox-content" role="dialog" aria-modal="true" aria-label="Foto ampliada">
+    <img id="photo-lightbox-image" alt="Foto ampliada">
+    <p id="photo-lightbox-caption" class="photo-lightbox-caption"></p>
+  </div>
+</div>
 <script>
+const zoomablePhotoSelector = '#before-preview img, #after-preview img, #before-editor img, #after-editor img, #carousel-preview img';
+const photoLightbox = document.getElementById('photo-lightbox');
+const photoLightboxImage = document.getElementById('photo-lightbox-image');
+const photoLightboxCaption = document.getElementById('photo-lightbox-caption');
+let previousBodyOverflow = '';
+
+function enhanceZoomablePhotos(root=document){
+  root.querySelectorAll(zoomablePhotoSelector).forEach(img=>{
+    img.classList.add('zoomable-photo');
+    img.tabIndex = 0;
+    img.setAttribute('role','button');
+    const description=(img.alt || 'Foto do veículo').trim();
+    img.setAttribute('aria-label',description+' — ampliar foto');
+    img.setAttribute('title','Clique ou toque para ampliar');
+  });
+}
+function openPhotoLightbox(img){
+  if(!img || !photoLightbox || !photoLightboxImage) return;
+  photoLightboxImage.src=img.currentSrc || img.src;
+  photoLightboxImage.alt=img.alt || 'Foto do veículo ampliada';
+  photoLightboxCaption.textContent=(img.alt || 'Foto do veículo')+' · Clique fora da foto ou pressione Esc para fechar.';
+  previousBodyOverflow=document.body.style.overflow;
+  document.body.style.overflow='hidden';
+  photoLightbox.classList.add('open');
+  photoLightbox.setAttribute('aria-hidden','false');
+  document.getElementById('photo-lightbox-close').focus();
+}
+function closePhotoLightbox(){
+  if(!photoLightbox || !photoLightboxImage) return;
+  photoLightbox.classList.remove('open');
+  photoLightbox.setAttribute('aria-hidden','true');
+  photoLightboxImage.removeAttribute('src');
+  document.body.style.overflow=previousBodyOverflow;
+}
+document.addEventListener('click',event=>{
+  const img=event.target.closest(zoomablePhotoSelector);
+  if(img){event.preventDefault();openPhotoLightbox(img);}
+  else if(event.target===photoLightbox || event.target.id==='photo-lightbox-close'){closePhotoLightbox();}
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape' && photoLightbox?.classList.contains('open')) closePhotoLightbox();
+  if((event.key==='Enter' || event.key===' ') && event.target.matches?.(zoomablePhotoSelector)){
+    event.preventDefault();openPhotoLightbox(event.target);
+  }
+});
+enhanceZoomablePhotos();
+
 function prepareRewrite(){
   const caption=document.querySelector('textarea[name="caption"]');
   const target=document.getElementById('rewrite-current-caption');
@@ -194,6 +261,7 @@ if(rewriteChooserButton){ rewriteChooserButton.addEventListener('click', openRew
     }
     document.getElementById('before-preview').innerHTML=before.map(c=>{const m=c.querySelector('img,video');return c.querySelector('video')?'<video src="'+m.src+'" muted playsinline controls></video>':'<img src="'+m.src+'" alt="Antes">';}).join('');
     document.getElementById('after-preview').innerHTML=after.map(c=>{const m=c.querySelector('img,video');return c.querySelector('video')?'<video src="'+m.src+'" muted playsinline controls></video>':'<img src="'+m.src+'" alt="Depois">';}).join('');
+    enhanceZoomablePhotos();
   }
   groups.forEach(group=>{
     group.addEventListener('dragstart',e=>{const card=e.target.closest('.photo-item');if(!card)return;dragged=card;card.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
