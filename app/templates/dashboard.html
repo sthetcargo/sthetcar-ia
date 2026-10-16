@@ -155,7 +155,7 @@
         <div class="v26-metric"><small>Veículos atendidos</small><strong>{{ metrics.vehicles }}</strong><span class="v26-sub">{{ metrics.services }} tipo{{ '' if metrics.services == 1 else 's' }} de serviço</span></div>
       </div>
       <div class="v26-lower">
-        <div class="v26-info"><small>Última publicação</small><strong>{{ metrics.latest_published.replace('T',' ') if metrics.latest_published else 'Nenhuma publicação registrada' }}</strong></div>
+        <div class="v26-info"><small>Última publicação</small><strong>{{ metrics.latest_published|local_datetime if metrics.latest_published else 'Nenhuma publicação registrada' }}</strong></div>
         <div class="v26-info"><small>Próxima ação</small><strong>{% if metrics.pending_publication > 0 %}📲 {{ metrics.pending_publication }} post{{ '' if metrics.pending_publication == 1 else 's' }} aguardando na fila{% else %}✨ Criar e aprovar um novo conteúdo{% endif %}</strong></div>
       </div>
       <div class="actions" style="margin-top:14px"><a class="btn secondary" href="{{ url_for('publication_queue') }}" style="text-decoration:none">📋 Abrir fila de publicações{% if metrics.pending_publication > 0 %} ({{ metrics.pending_publication }}){% endif %}</a></div>
@@ -187,7 +187,7 @@
                 <div class="queue-side"><span>DEPOIS</span>{% set qafter=((item.after_images or [item.after_image])[0]) %}{% if qafter|is_video_media %}<video src="{{ qafter|media_url }}" controls muted playsinline></video>{% else %}<img src="{{ qafter|media_url }}" alt="Depois">{% endif %}</div>
               </div>
               <div class="queue-body">
-                <div class="queue-top"><span>{{ item.created_at.replace('T',' ') }}</span><strong>AGUARDANDO APROVAÇÃO</strong></div>
+                <div class="queue-top"><span>{{ item.created_at|local_datetime }}</span><strong>AGUARDANDO APROVAÇÃO</strong></div>
                 <h4>{{ item.vehicle or 'Veículo a confirmar' }}</h4>
                 <div class="queue-service">{{ item.service or 'Serviço a confirmar' }}</div>
                 {% if item.plate_redaction_message %}<p style="font-size:11px;color:#72510b;background:#fff7df;border-radius:8px;padding:8px">🛡️ {{ item.plate_redaction_message }}</p>{% else %}<p style="font-size:11px;color:#72510b;background:#fff7df;border-radius:8px;padding:8px">Este rascunho é anterior à proteção automática de placas; a publicação ficará bloqueada.</p>{% endif %}
@@ -203,7 +203,7 @@
     {% if error %}<div class="msg error"><span>⚠️</span><div>{{ error }}</div></div>{% endif %}
 
     {% if approved %}
-      <div class="msg success"><span>✓</span><div><strong>Conteúdo aprovado com sucesso.</strong><br>Aprovado em {{ approved.approved_at.replace('T', ' ') }}. O post foi salvo localmente e <strong>ainda não foi publicado no Instagram</strong>.</div></div>
+      <div class="msg success"><span>✓</span><div><strong>Conteúdo aprovado com sucesso.</strong><br>Aprovado em {{ approved.approved_at|local_datetime }}. O post foi salvo localmente e <strong>ainda não foi publicado no Instagram</strong>.</div></div>
       <div class="card">
         <div class="card-head"><div><h3>Próxima etapa</h3><p>Quando estivermos prontos, vamos conectar o Instagram para transformar este conteúdo aprovado em publicação.</p></div><span class="approved-badge">✓ APROVADO</span></div>
         <div class="meta-row">
@@ -329,7 +329,7 @@
               {% endif %}
               <div class="history-body">
                 <div class="history-top">
-                  <span class="history-date">{{ item.approved_at.replace('T',' ') }}</span>
+                  <span class="history-date">{{ item.approved_at|local_datetime }}</span>
                   {% if item.instagram_publication and item.instagram_publication.status == 'PUBLICADO' %}
                     <span class="history-status published">✓ PUBLICADO</span>
                   {% else %}
