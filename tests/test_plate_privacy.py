@@ -66,6 +66,23 @@ class PlatePrivacyTests(unittest.TestCase):
         self.assertTrue(self.original.is_file())
         self.assertFalse((self.root / "car_placa_protegida.jpg").exists())
 
+    def test_unexpected_detector_error_returns_reference_and_logs_diagnostic(self):
+        with patch(
+            "app.ai.plate_privacy._detect_license_plates",
+            side_effect=RuntimeError("simulated detector failure"),
+        ):
+            with self.assertLogs("app.ai.plate_privacy", level="ERROR") as captured:
+                with self.assertRaises(PlatePrivacyError) as raised:
+                    create_plate_safe_copies([self.original])
+
+        message = str(raised.exception)
+        self.assertIn("Código de diagnóstico: PLATE-", message)
+        diagnostic = message.split("Código de diagnóstico: ", 1)[1].split(".", 1)[0]
+        self.assertTrue(any(diagnostic in line for line in captured.output))
+        self.assertNotIn("simulated detector failure", message)
+        self.assertEqual(self.original.read_bytes(), self.original_bytes)
+        self.assertFalse((self.root / "car_placa_protegida.jpg").exists())
+
     def test_invalid_box_fails_closed_and_keeps_original(self):
         result = [{
             "index": 1,
