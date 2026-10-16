@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.time_utils import format_local_datetime
 from app.publication_split import split_photo_collections
 import copy
@@ -2330,14 +2330,21 @@ def publication_queue():
     history = reconcile_publication_records(enrich_history(load_history()))
     connection = load_instagram_connection()
     audit = load_publication_audit()
+    facebook_connection = load_facebook_connection()
+    facebook_audit = load_facebook_publication_audit()
     pending = []
     published = []
     discarded = []
+    divided = []
 
     for index, item in enumerate(history):
         pub = find_publication_record(item, audit, connection.get("username", ""))
+        facebook_pub = find_facebook_publication_record(
+            item, facebook_audit, facebook_connection.get("page_id", "")
+        )
         before_images = item.get("before_images") or ([item.get("before_image")] if item.get("before_image") else [])
         after_images = item.get("after_images") or ([item.get("after_image")] if item.get("after_image") else [])
+        queue_status = str(item.get("publication_queue_status", "")).upper()
         record = {
             "index": index,
             "approved_at": item.get("approved_at", ""),
@@ -2346,11 +2353,26 @@ def publication_queue():
             "caption": item.get("caption", ""),
             "before_images": before_images,
             "after_images": after_images,
+            "photo_count": len(before_images) + len(after_images),
             "publication": pub,
-            "queue_status": str(item.get("publication_queue_status", "")).upper(),
+            "facebook_publication": facebook_pub,
+            "facebook_published": str(facebook_pub.get("status", "")).upper() == "PUBLICADO",
+            "queue_status": queue_status,
+            "split_count": len(item.get("split_children") or []),
+            "split_pending_facebook": bool(item.get("split_pending_facebook", False)),
         }
-        if record["queue_status"] == "DESCARTADO":
+        if queue_status == "DESCARTADO":
             discarded.append(record)
+        elif queue_status == "DIVIDIDO":
+            divided.append(record)
+        elif (
+            str(pub.get("status", "")).upper() == "PUBLICADO"
+            and record["split_pending_facebook"]
+            and not record["facebook_published"]
+        ):
+            # A split child whose first ten photos already appeared on Instagram
+            # remains actionable until its Facebook publication also succeeds.
+            pending.append(record)
         elif str(pub.get("status", "")).upper() == "PUBLICADO":
             published.append(record)
         else:
@@ -2361,8 +2383,11 @@ def publication_queue():
         pending=pending,
         published=published,
         discarded=discarded,
+        divided=divided,
         connection=connection,
-        total=len(history),
+        split_done=request.args.get("split_done") == "1",
+        queue_error=request.args.get("queue_error", ""),
+        total=sum(1 for item in history if str(item.get("publication_queue_status", "")).upper() != "DIVIDIDO"),
     )
 
 
