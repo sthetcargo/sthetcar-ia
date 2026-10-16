@@ -38,7 +38,7 @@ class PlatePrivacyTests(unittest.TestCase):
         self.assertTrue(safe.is_file())
         self.assertEqual(safe.suffix.lower(), ".jpg")
         self.assertEqual(self.original.read_bytes(), self.original_bytes)
-        self.assertEqual(summary["plate_redaction_version"], 1)
+        self.assertEqual(summary["plate_redaction_version"], 2)
         self.assertEqual(summary["plate_redaction_count"], 1)
         self.assertIn("borradas", summary["plate_redaction_message"])
 
