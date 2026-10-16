@@ -1,4 +1,5 @@
 import os
+import json
 import difflib
 import re
 from pathlib import Path
@@ -435,3 +436,108 @@ def generate_post(analysis: str, vehicle: str = "",
     )
     text = _response_text(retry_response)
     return text or _fallback_caption(analysis, vehicle, service)
+
+
+
+def detect_license_plates(paths):
+    """Return normalized bounding boxes for every visible license plate in each image.
+
+    The model is asked to localize plates, not to read or transcribe their characters.
+    This is a privacy aid, not a guarantee; callers must show a reviewable preview.
+    """
+    paths = [Path(path) for path in paths]
+    if not paths:
+        return []
+
+    client = _client()
+    prompt = """
+Você é um detector visual de placas de identificação veicular para proteção de privacidade.
+Analise CADA imagem anexada, separadamente. Não transcreva, não reconheça por OCR e não
+retorne letras ou números da placa.
+
+Retorne SOMENTE JSON válido neste formato:
+{
+  "images": [
+    {
+      "index": 1,
+      "plates": [{"x1": 100, "y1": 200, "x2": 400, "y2": 300}],
+      "needs_review": false
+    }
+  ]
+}
+
+Regras:
+- Deve haver exatamente uma entrada para cada imagem fornecida, com seu índice indicado antes dela.
+- Coordenadas normalizadas de 0 a 1000: x1/y1 são o canto superior esquerdo e x2/y2 o inferior direito.
+- Cada caixa deve cobrir a placa inteira e sua moldura, com uma pequena margem externa.
+- Inclua TODAS as placas veiculares visíveis, mesmo pequenas, inclinadas, distantes ou parcialmente ocultas.
+- Se houver uma área que possa ser uma placa mas não for possível localizar a caixa com confiança,
+  marque needs_review=true e inclua a caixa mais conservadora possível, quando conseguir.
+- Use needs_review=false somente quando estiver confiante de que as placas visíveis foram localizadas
+  ou de que não há placa veicular visível na imagem.
+- Se a imagem estiver desfocada, cortada, escura, refletida ou ambígua e isso impedir excluir uma placa,
+  marque needs_review=true.
+- Não invente placas em objetos que claramente não sejam veículos.
+"""
+    contents = [prompt]
+    for index, path in enumerate(paths, 1):
+        contents.extend([f"IMAGEM {index} (índice obrigatório: {index})", _image_part(path)])
+
+    response, _ = _generate(
+        client,
+        contents,
+        temperature=0,
+        max_output_tokens=min(4096, max(900, len(paths) * 240)),
+    )
+    raw = _response_text(response)
+    if not raw:
+        raise RuntimeError("O detector de placas não retornou uma resposta.")
+    raw = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", raw, flags=re.IGNORECASE)
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end < start:
+        raise RuntimeError("O detector de placas retornou um formato inválido.")
+    try:
+        payload = json.loads(raw[start:end + 1])
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Não foi possível interpretar a detecção de placas.") from exc
+
+    entries = payload.get("images") if isinstance(payload, dict) else None
+    if not isinstance(entries, list) or len(entries) != len(paths):
+        raise RuntimeError("A detecção não conferiu todas as fotos enviadas.")
+
+    by_index = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise RuntimeError("A detecção de placas retornou um item inválido.")
+        try:
+            index = int(entry.get("index"))
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("A detecção de placas não identificou a foto correspondente.") from exc
+        if index < 1 or index > len(paths) or index in by_index:
+            raise RuntimeError("A detecção de placas retornou índices duplicados ou inválidos.")
+        plates = entry.get("plates")
+        needs_review = entry.get("needs_review")
+        if not isinstance(plates, list) or not isinstance(needs_review, bool):
+            raise RuntimeError("A detecção de placas retornou campos incompletos.")
+        checked_plates = []
+        for box in plates:
+            if not isinstance(box, dict):
+                raise RuntimeError("A detecção retornou uma caixa de placa inválida.")
+            try:
+                coords = {key: float(box[key]) for key in ("x1", "y1", "x2", "y2")}
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError("A detecção retornou coordenadas de placa incompletas.") from exc
+            if any(not 0 <= value <= 1000 for value in coords.values()):
+                raise RuntimeError("A detecção retornou coordenadas fora da imagem.")
+            if coords["x2"] <= coords["x1"] or coords["y2"] <= coords["y1"]:
+                raise RuntimeError("A detecção retornou uma caixa de placa sem área.")
+            checked_plates.append(coords)
+        by_index[index] = {
+            "index": index,
+            "plates": checked_plates,
+            "needs_review": needs_review,
+        }
+
+    if set(by_index) != set(range(1, len(paths) + 1)):
+        raise RuntimeError("A detecção de placas deixou fotos sem verificação.")
+    return [by_index[index] for index in range(1, len(paths) + 1)]
