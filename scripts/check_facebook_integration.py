@@ -226,7 +226,7 @@ assert "json.loads" in plate_detector_source and "range(1, len(paths) + 1)" in p
 dashboard_route_source = ast.get_source_segment(source, function_nodes["dashboard"])
 assert "create_plate_safe_copies" in dashboard_route_source, "New uploads must be processed before creating a post"
 assert "before_images_original" in dashboard_route_source and "after_images_original" in dashboard_route_source
-assert "Vídeos" in dashboard_route_source, "Video uploads must be blocked until video-frame redaction exists"
+assert "vídeos" in dashboard_route_source.casefold(), "Video uploads must be blocked until video-frame redaction exists"
 preflight_source = ast.get_source_segment(source, function_nodes["_preflight_selected_platforms"])
 assert 'str(post.get("plate_redaction_version", "")) != "1"' in preflight_source, "Legacy posts without redaction must not publish"
 assert "plate_redaction_version" in ast.get_source_segment(source, function_nodes["publication_confirmation_fingerprint"])
