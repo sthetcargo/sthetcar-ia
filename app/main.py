@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime
 from app.time_utils import format_local_datetime
+from app.publication_split import split_photo_collections
 import copy
 import difflib
 import json
@@ -638,7 +639,10 @@ def facebook_media_urls(post):
     before = [x for x in (post.get("before_images") or [post.get("before_image")]) if x]
     after = [x for x in (post.get("after_images") or [post.get("after_image")]) if x]
     if len(before) + len(after) > 10:
-        raise RuntimeError("O Facebook permite no máximo 10 fotos por publicação. Reduza a quantidade na fila antes de publicar.")
+        raise RuntimeError(
+            f"Esta publicação tem {len(before) + len(after)} fotos. "
+            "Divida-a em partes na Fila de Publicações antes de publicar no Facebook."
+        )
     items = instagram_media_items(post)
     if any(str(item.get("media_type", "")).upper() != "IMAGE" for item in items):
         raise RuntimeError("A publicação no Facebook aceita somente fotos neste fluxo. O fluxo do Instagram permanece separado.")
@@ -910,8 +914,14 @@ def instagram_media_items(post):
         if index < len(after):
             chosen.append((after[index], "after"))
 
+    if len(chosen) > 10:
+        raise RuntimeError(
+            f"Esta publicação tem {len(chosen)} fotos. O Instagram aceita até 10 por carrossel. "
+            "Use 'Dividir em partes' na Fila de Publicações; nenhuma foto será cortada silenciosamente."
+        )
+
     result = []
-    for value, side in chosen[:10]:
+    for value, side in chosen:
         ref = ensure_remote_image_ref(value, side)
         if is_remote_ref(ref):
             url = signed_url(remote_path_from_ref(ref), 3600)
@@ -1208,7 +1218,7 @@ def dashboard_history_display(history):
     """Hide posts discarded from the publication queue without deleting their audit records."""
     visible = []
     for history_index, item in enumerate(history):
-        if str(item.get("publication_queue_status", "")).strip().upper() == "DESCARTADO":
+        if str(item.get("publication_queue_status", "")).strip().upper() in {"DESCARTADO", "DIVIDIDO"}:
             continue
         visible_item = dict(item)
         visible_item["history_index"] = history_index
@@ -1221,7 +1231,7 @@ def dashboard_metrics(history):
     history = reconcile_publication_records(history)
     history = [
         item for item in history
-        if str(item.get("publication_queue_status", "")).strip().upper() != "DESCARTADO"
+        if str(item.get("publication_queue_status", "")).strip().upper() not in {"DESCARTADO", "DIVIDIDO"}
     ]
     total_photos = 0
     published = 0
@@ -2063,6 +2073,16 @@ def _preflight_selected_platforms(post_index, selected):
     if not (0 <= post_index < len(history)):
         raise RuntimeError("Post aprovado não encontrado.")
     post = history[post_index]
+    queue_status = str(post.get("publication_queue_status", "")).strip().upper()
+    if queue_status == "DIVIDIDO":
+        raise RuntimeError("Este post original foi dividido em partes. Publique as partes individuais na Fila de Publicações.")
+    before_images = post.get("before_images") or ([post.get("before_image")] if post.get("before_image") else [])
+    after_images = post.get("after_images") or ([post.get("after_image")] if post.get("after_image") else [])
+    if len(before_images) + len(after_images) > 10:
+        raise RuntimeError(
+            f"Este post tem {len(before_images) + len(after_images)} fotos. "
+            "Divida-o em partes na Fila de Publicações antes de preparar a mídia."
+        )
     if not publication_key(post):
         raise RuntimeError("O post aprovado não tem uma identificação estável para confirmação.")
     if str(post.get("plate_redaction_version", "")) != "2":
