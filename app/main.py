@@ -20,6 +20,7 @@ from app.ai.vision import analyze_before_after
 from app.ai.plate_privacy import create_plate_safe_copies
 from app.ai.copywriter import generate_post
 from app.ai.gemini import rewrite_caption
+from app.ai.text_inference import infer_service, infer_vehicle
 from app.storage import (
     upload_file, delete_file, signed_url,
     make_remote_ref, is_remote_ref, remote_path_from_ref,
@@ -503,7 +504,7 @@ def build_publication_draft(post, post_index, connection):
     full_caption = f"{caption}\n\n{hashtags}".strip() if hashtags else caption
     return {
         "prepared_at": datetime.now().isoformat(timespec="seconds"),
-        "status": "PREPARADO â€” nÃ£o publicado",
+        "status": "PREPARADO — não publicado",
         "post_index": post_index,
         "approved_at": post.get("approved_at", ""),
         "publication_key": publication_key(post),
@@ -520,7 +521,7 @@ def build_publication_draft(post, post_index, connection):
         "full_caption": full_caption,
         "before_images": post.get("before_images", []),
         "after_images": post.get("after_images", []),
-        "note": "Rascunho local. Nenhuma chamada de publicaÃ§Ã£o final foi executada.",
+        "note": "Rascunho local. Nenhuma chamada de publicação final foi executada.",
     }
 
 
@@ -1022,7 +1023,7 @@ def instagram_publish_container(connection, container_id):
     user_id = connection.get("user_id", "")
     token = connection.get("access_token", "")
     if not user_id or not token:
-        raise RuntimeError("ConexÃ£o do Instagram incompleta.")
+        raise RuntimeError("Conexão do Instagram incompleta.")
     return _http_json_request(
         f"https://graph.instagram.com/{cfg['api_version']}/{user_id}/media_publish",
         data={
@@ -1115,8 +1116,8 @@ def fallback_hashtags(vehicle: str = "", service: str = ""):
 
     service_map = {
         "lavagem externa": ["#LavagemExterna", "#LavagemAutomotiva"],
-        "higienizaÃ§Ã£o interna": ["#HigienizacaoInterna", "#LimpezaAutomotiva"],
-        "lavagem e higienizaÃ§Ã£o": ["#LavagemAutomotiva", "#HigienizacaoAutomotiva"],
+        "higienização interna": ["#HigienizacaoInterna", "#LimpezaAutomotiva"],
+        "lavagem e higienização": ["#LavagemAutomotiva", "#HigienizacaoAutomotiva"],
         "polimento": ["#PolimentoAutomotivo", "#BrilhoAutomotivo"],
     }
     service_key = service_text.casefold()
@@ -1174,95 +1175,6 @@ def split_post(post_text: str, vehicle: str = "", service: str = ""):
         hashtags = fallback_hashtags(vehicle, service)
 
     return caption, hashtags
-
-
-def infer_vehicle(text: str):
-    """Infer a vehicle/model from explicit phrases in the AI analysis.
-
-    The AI may write model names in lowercase, inside a markdown section, or
-    after words such as "picape". Keep the inference conservative.
-    """
-    import re
-
-    text = text or ""
-    normalized = re.sub(r"\s+", " ", text).strip()
-    if not normalized:
-        return ""
-
-    # Prefer the dedicated section produced by the vision prompt.
-    match = re.search(
-        r"VE[IÃ]CULO\s+IDENTIFICADO\s*:\s*([^\n]+)",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if match:
-        value = match.group(1).strip(" .,:;()-")
-        invalid_values = {
-            "nÃ£o identificado", "nao identificado", "nÃ£o informado", "nao informado",
-            "nÃ£o foi possÃ­vel determinar", "nao foi possivel determinar",
-            "posicionada sobre uma", "posicionado sobre uma", "nÃ£o foi identificada",
-            "nao foi identificada", "nÃ£o Ã© possÃ­vel identificar", "nao e possivel identificar",
-        }
-        value_key = re.sub(r"\s+", " ", value.casefold()).strip()
-        # Never turn a fragment of the generated prose into the vehicle name.
-        if value and value_key not in invalid_values and len(value.split()) <= 5:
-            generic_starts = ("posicion", "localiz", "apresent", "observ", "mostr", "estÃ¡", "esta ")
-            if not value_key.startswith(generic_starts):
-                return value
-
-    # Common explicit model codes/names that are safe to recognize when the
-    # analysis clearly refers to the vehicle.
-    known_models = [
-        (r"\bs[- ]?10\b", "S-10"),
-        (r"\branger\b", "Ranger"),
-        (r"\bhilux\b", "Hilux"),
-        (r"\bt[- ]?cross\b", "T-Cross"),
-        (r"\btracker\b", "Tracker"),
-        (r"\bcorolla\b", "Corolla"),
-        (r"\bcivic\b", "Civic"),
-        (r"\bcompass\b", "Compass"),
-        (r"\bhr[- ]?v\b", "HR-V"),
-        (r"\bcreta\b", "Creta"),
-        (r"\bonix\b", "Onix"),
-        (r"\bkwid\b", "Kwid"),
-        (r"\bargo\b", "Argo"),
-    ]
-    for pattern, label in known_models:
-        if re.search(pattern, normalized, re.IGNORECASE):
-            return label
-
-    # Finally, capture a short phrase immediately following an explicit
-    # vehicle type, e.g. "picape S-10" or "veÃ­culo Corolla".
-    match = re.search(
-        r"(?:ve[iÃ­]culo|picape|pickup|carro|autom[oÃ³]vel|caminhonete)\s+(?:da\s+marca\s+)?([A-Za-z0-9][A-Za-z0-9-]*(?:\s+[A-Za-z0-9][A-Za-z0-9-]*){0,2})",
-        normalized,
-        flags=re.IGNORECASE,
-    )
-    if match:
-        value = match.group(1).strip(" .,:;()")
-        # Avoid swallowing generic prose instead of a model.
-        stop = {"passou", "apresenta", "foi", "estÃ¡", "esta", "tem", "com", "por"}
-        first = value.split()[0].lower() if value else ""
-        if value and first not in stop and len(value) <= 40:
-            return value
-
-    return ""
-
-def infer_service(text: str):
-    """Infer a conservative service label from the AI analysis when blank."""
-    text = (text or "").lower()
-    candidates = [
-        ("Lavagem e HigienizaÃ§Ã£o", ("lavagem", "higienizaÃ§Ã£o")),
-        ("Lavagem e HigienizaÃ§Ã£o", ("lavagem", "limpeza interna")),
-        ("HigienizaÃ§Ã£o Interna", ("higienizaÃ§Ã£o interna",)),
-        ("Lavagem Externa", ("lavagem externa",)),
-        ("Polimento", ("polimento",)),
-        ("Detalhamento Automotivo", ("detalhamento",)),
-    ]
-    for label, terms in candidates:
-        if all(term in text for term in terms):
-            return label
-    return ""
 
 
 def enrich_history(history):
@@ -1351,14 +1263,31 @@ def dashboard_metrics(history):
 
 @app.errorhandler(413)
 def request_too_large(error):
+    # A handler for oversized uploads must not fail by querying Supabase again
+    # while trying to render its own error page.
+    history = []
+    approval_queue = []
+    history_display = []
+    metrics = {
+        "approved": 0, "published": 0, "pending_publication": 0,
+        "photos": 0, "vehicles": 0, "services": 0, "latest_published": None,
+    }
+    try:
+        history = load_history()
+        approval_queue = load_approval_queue()
+        history_display = dashboard_history_display(history)
+        metrics = dashboard_metrics(history)
+    except Exception:
+        app.logger.exception("Falha ao carregar estado enquanto tratava upload acima do limite")
     return render_template(
         "dashboard.html",
         result=None,
-        error="O servidor recusou o envio porque o pacote ficou grande demais. Selecione menos fotos ou tente novamente; o V11 jÃ¡ comprime as imagens no navegador antes de enviar.",
+        error="O envio ficou acima do limite de 35 MB do servidor. As fotos originais continuam preservadas; reduza a quantidade ou o tamanho dos arquivos e tente novamente.",
         approved=None,
-        history=load_history(),
-        history_display=dashboard_history_display(load_history()),
-        approval_queue=load_approval_queue(),
+        history=history,
+        history_display=history_display,
+        approval_queue=approval_queue,
+        metrics=metrics,
     ), 413
 
 
@@ -1419,11 +1348,11 @@ def dashboard():
             )
 
             if not vehicle:
-                error = "Informe o veÃ­culo antes de aprovar o conteÃºdo."
+                error = "Informe o veículo antes de aprovar o conteúdo."
             elif not service:
-                error = "Informe o serviÃ§o realizado antes de aprovar o conteÃºdo."
+                error = "Informe o serviço realizado antes de aprovar o conteúdo."
             elif not caption:
-                error = "A legenda nÃ£o pode ficar vazia."
+                error = "A legenda não pode ficar vazia."
             else:
                 approved_at = datetime.now().isoformat(timespec="seconds")
                 approval = {
@@ -1432,7 +1361,7 @@ def dashboard():
                     "hashtags": hashtags,
                     "vehicle": vehicle,
                     "service": service,
-                    "status": "APROVADO â€” aguardando conexÃ£o com o Instagram",
+                    "status": "APROVADO — aguardando conexão com o Instagram",
                 }
 
                 # Keep the latest approval for compatibility with the MVP.
@@ -1446,7 +1375,7 @@ def dashboard():
                     "approved_at": approved_at,
                     "caption": caption,
                     "hashtags": hashtags,
-                    "status": "APROVADO â€” aguardando conexÃ£o com o Instagram",
+                    "status": "APROVADO — aguardando conexão com o Instagram",
                     # The DOM order is the approved order. V29 lets the user drag/reorder
                     # photos before approval and this list preserves that exact sequence.
                     "before_images": ordered_before,
@@ -1491,7 +1420,7 @@ def dashboard():
             elif any(is_video_file(f.filename) and (getattr(f, "content_length", None) or 0) > MAX_VIDEO_BYTES for f in before_files + after_files):
                 error = "Cada vídeo deve ter no máximo 20 MB."
             elif request.content_length and request.content_length > app.config["MAX_CONTENT_LENGTH"]:
-                error = "O envio ultrapassou o limite de 30 MB. As fotos sÃ£o comprimidas automaticamente antes do envio; se isso acontecer, reduza a quantidade de fotos."
+                error = "O envio ultrapassou o limite de 30 MB. As fotos são comprimidas automaticamente antes do envio; se isso acontecer, reduza a quantidade de fotos."
             else:
                 stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                 before_paths, after_paths = [], []
@@ -1641,7 +1570,7 @@ def review_pending(pending_id):
     queue = load_approval_queue()
     pending = next((item for item in queue if item.get("pending_id") == pending_id), None)
     if not pending:
-        return redirect(url_for("dashboard", queue_error="ConteÃºdo pendente nÃ£o encontrado."))
+        return redirect(url_for("dashboard", queue_error="Conteúdo pendente não encontrado."))
     return render_template("review_pending.html", result=pending, pending=pending, history=enrich_history(load_history()), approval_queue=queue)
 
 
@@ -1763,7 +1692,7 @@ def discard_pending(pending_id):
     queue = load_approval_queue()
     pending = next((item for item in queue if item.get("pending_id") == pending_id), None)
     if not pending:
-        return redirect(url_for("dashboard", queue_error="ConteÃºdo pendente nÃ£o encontrado."))
+        return redirect(url_for("dashboard", queue_error="Conteúdo pendente não encontrado."))
 
     queue = [item for item in queue if item.get("pending_id") != pending_id]
     save_approval_queue(queue)
@@ -1779,7 +1708,7 @@ def discard_pending(pending_id):
     })
     save_discarded_posts(discarded[:200])
     delete_pending_uploads(pending)
-    return redirect(url_for("dashboard", notice="ConteÃºdo descartado. As fotos pendentes foram removidas do fluxo."))
+    return redirect(url_for("dashboard", notice="Conteúdo descartado. As fotos pendentes foram removidas do fluxo."))
 
 
 @app.route("/auth/instagram")
@@ -1815,7 +1744,7 @@ def instagram_callback():
         short = exchange_instagram_code(code)
         short_token = short.get("access_token")
         if not short_token:
-            raise RuntimeError("A Meta nÃ£o retornou o token de acesso.")
+            raise RuntimeError("A Meta não retornou o token de acesso.")
         long_lived = extend_instagram_token(short_token)
         access_token = long_lived.get("access_token") or short_token
         profile = get_instagram_profile(access_token)
@@ -1974,7 +1903,7 @@ def facebook_disconnect():
 def instagram_validate():
     connection = load_instagram_connection()
     if not connection.get("access_token"):
-        return redirect(url_for("instagram_central", oauth_error="Instagram ainda nÃ£o estÃ¡ conectado."))
+        return redirect(url_for("instagram_central", oauth_error="Instagram ainda não está conectado."))
     try:
         profile = get_instagram_profile(connection["access_token"])
         connection.update({
@@ -1991,7 +1920,7 @@ def instagram_validate():
         connection["validation_status"] = "ERRO"
         connection["validation_error"] = str(exc)
         save_instagram_connection(connection)
-        return redirect(url_for("instagram_central", oauth_error=f"Falha na validaÃ§Ã£o: {exc}"))
+        return redirect(url_for("instagram_central", oauth_error=f"Falha na validação: {exc}"))
 
 
 @app.route("/instagram/prepare", methods=["POST"])
@@ -2006,14 +1935,14 @@ def instagram_prepare():
         post_index = 0
 
     if not connection.get("access_token") or not connection.get("username"):
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="Conecte e valide o Instagram antes de preparar a publicaÃ§Ã£o."))
+        return redirect(url_for("instagram_central", post=post_index, oauth_error="Conecte e valide o Instagram antes de preparar a publicação."))
     if not (0 <= post_index < len(history)):
-        return redirect(url_for("instagram_central", oauth_error="Post aprovado nÃ£o encontrado."))
+        return redirect(url_for("instagram_central", oauth_error="Post aprovado não encontrado."))
 
     post = history[post_index]
     prior = find_publication_record(post, audit, connection.get("username", ""))
     if prior:
-        return redirect(url_for("instagram_central", post=post_index, published="1", oauth_error="Este post jÃ¡ foi publicado no Instagram. A publicaÃ§Ã£o duplicada foi bloqueada."))
+        return redirect(url_for("instagram_central", post=post_index, published="1", oauth_error="Este post já foi publicado no Instagram. A publicação duplicada foi bloqueada."))
     draft = build_publication_draft(post, post_index, connection)
     save_publication_draft(draft)
     return redirect(url_for("instagram_central", post=post_index, prepared="1"))
@@ -2050,15 +1979,15 @@ def instagram_test_media():
         post_index = 0
 
     if not connection.get("access_token") or not connection.get("username"):
-        return redirect(url_for("instagram_central", post=post_index, oauth_error="Conecte o Instagram antes de testar a mÃ­dia."))
+        return redirect(url_for("instagram_central", post=post_index, oauth_error="Conecte o Instagram antes de testar a mídia."))
     if not (0 <= post_index < len(history)):
-        return redirect(url_for("instagram_central", oauth_error="Post aprovado nÃ£o encontrado."))
+        return redirect(url_for("instagram_central", oauth_error="Post aprovado não encontrado."))
 
     try:
         post = history[post_index]
         prior = find_publication_record(post, audit, connection.get("username", ""))
         if prior:
-            return redirect(url_for("instagram_central", post=post_index, published="1", oauth_error="Este post jÃ¡ foi publicado no Instagram. O teste de mÃ­dia foi bloqueado para evitar duplicaÃ§Ã£o."))
+            return redirect(url_for("instagram_central", post=post_index, published="1", oauth_error="Este post já foi publicado no Instagram. O teste de mídia foi bloqueado para evitar duplicação."))
         if str(post.get("plate_redaction_version", "")) != "2":
             return redirect(url_for(
                 "instagram_central",
@@ -2103,13 +2032,13 @@ def instagram_test_media():
             "container_status": status,
             "public_media_urls": [item["url"] for item in media_items],
             "media_types": [item["media_type"] for item in media_items],
-            "status": "MÃDIA PREPARADA NO INSTAGRAM â€” ainda nÃ£o publicada",
-            "note": "Container criado no Instagram. A publicaÃ§Ã£o final ainda exige confirmaÃ§Ã£o explÃ­cita.",
+            "status": "MÍDIA PREPARADA NO INSTAGRAM — ainda não publicada",
+            "note": "Container criado no Instagram. A publicação final ainda exige confirmação explícita.",
         })
         save_publication_draft(draft)
         return redirect(url_for("instagram_central", post=post_index, media_tested="1"))
     except Exception as exc:
-        return redirect(url_for("instagram_central", post=post_index, oauth_error=f"Falha ao preparar mÃ­dia no Instagram: {exc}"))
+        return redirect(url_for("instagram_central", post=post_index, oauth_error=f"Falha ao preparar mídia no Instagram: {exc}"))
 
 
 PENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS = 10 * 60

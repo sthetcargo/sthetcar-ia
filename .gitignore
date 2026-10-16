@@ -1,0 +1,26 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!.FACEBOOK_ENV_V33.2.21.example
+
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local environments and editor files
+.venv/
+venv/
+ENV/
+.vscode/
+.idea/
+*.swp
+
+# Runtime data and uploaded media; production state belongs in Supabase
+generated/
+uploads/
+*.log
