@@ -1935,9 +1935,29 @@ def instagram_prepare():
 
 @app.route("/instagram/test-media", methods=["POST"])
 def instagram_test_media():
-    history = reconcile_publication_records(enrich_history(load_history()))
-    connection = load_instagram_connection()
-    audit = load_publication_audit()
+    # These reads used to run outside the route's error handler. A transient
+    # Supabase/app_state failure could therefore produce Flask's plain HTTP 500
+    # instead of returning a safe diagnostic to the user.
+    try:
+        history = reconcile_publication_records(enrich_history(load_history()))
+        connection = load_instagram_connection()
+        audit = load_publication_audit()
+    except Exception as exc:
+        diagnostic_id = "MEDIA-" + secrets.token_hex(4).upper()
+        app.logger.exception(
+            "Falha ao carregar dados para preparar mídia do Instagram [%s] (%s)",
+            diagnostic_id,
+            type(exc).__name__,
+        )
+        return redirect(url_for(
+            "instagram_central",
+            oauth_error=(
+                "Não foi possível carregar os dados para preparar a mídia. "
+                "Nenhuma publicação foi feita. Atualize a página e tente novamente. "
+                f"Código de diagnóstico: {diagnostic_id}."
+            ),
+        ))
+
     try:
         post_index = int(request.form.get("post_index", "0"))
     except (TypeError, ValueError):
