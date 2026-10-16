@@ -271,4 +271,37 @@ for marker in ("load_instagram_connection()", "load_publication_audit()", "MEDIA
 assert "Nenhuma publicação foi feita" in media_test_source, "Failure must tell the user no post was published"
 assert "Código de diagnóstico:" in media_test_source, "Failure must provide a safe diagnostic code"
 
-print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, and Jinja templates.")
+
+# UI timestamps must be converted only for display to Brasília time. Stored publication
+# keys/timestamps remain unchanged so matching and duplicate protection keep working.
+time_utils_path = root / "app" / "time_utils.py"
+time_utils_source = time_utils_path.read_text(encoding="utf-8")
+ast.parse(time_utils_source, filename=str(time_utils_path))
+assert "America/Sao_Paulo" in time_utils_source
+assert "timezone.utc" in time_utils_source, "Naive historical Render timestamps must be interpreted as UTC"
+assert "astimezone(BRASILIA_TIMEZONE)" in time_utils_source
+main_import_source = source
+assert "from app.time_utils import format_local_datetime" in main_import_source
+assert 'app.add_template_filter(format_local_datetime, "local_datetime")' in main_import_source
+for content, label in (
+    (dashboard_template, "dashboard"),
+    (review_template, "review pending"),
+    (confirm_template, "publication confirmation"),
+):
+    Environment().parse(content)
+instagram_template_path = root / "app" / "templates" / "instagram.html"
+instagram_template = instagram_template_path.read_text(encoding="utf-8")
+publication_queue_path = root / "app" / "templates" / "publication_queue.html"
+publication_queue_template = publication_queue_path.read_text(encoding="utf-8")
+for content, label in (
+    (instagram_template, "Instagram"),
+    (dashboard_template, "dashboard"),
+    (publication_queue_template, "publication queue"),
+):
+    Environment().parse(content)
+    assert "|local_datetime" in content, f"{label} dates must use Brasília time formatting"
+assert "draft.prepared_at.replace('T',' ')" not in instagram_template
+assert "item.created_at.replace('T',' ')" not in dashboard_template
+assert "item.publication.published_at.replace('T',' ')" not in publication_queue_template
+
+print("PASS: Python AST, publication guards, Instagram polling/retry, caption rewrites, discarded history, plate privacy, review photo zoom, media-test diagnostics, Brasília timezone formatting, and Jinja templates.")
