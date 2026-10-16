@@ -14,12 +14,12 @@ def main():
 
     source = Path(args.source).resolve()
     if not source.exists():
-        raise SystemExit(f"Pasta fonte nÃ£o encontrada: {source}")
+        raise SystemExit(f"Pasta fonte não encontrada: {source}")
 
-    # O .env da instalaÃ§Ã£o antiga fornece a chave secreta sem ser copiado para o pacote.
+    # O .env da instalação antiga fornece a chave secreta sem ser copiado para o pacote.
     load_dotenv(source / ".env", override=True)
 
-    # Importa somente depois de carregar o .env da instalaÃ§Ã£o fonte.
+    # Importa somente depois de carregar o .env da instalação fonte.
     from app.storage import upload_file, make_remote_ref
     from app.cloud_state import save_cloud_state
 
@@ -68,11 +68,11 @@ def main():
         if save_cloud_state(key, rewrite(data)):
             migrated_states += 1
         else:
-            raise RuntimeError(f"NÃ£o foi possÃ­vel gravar o estado {key}. Execute primeiro supabase_app_state.sql.")
+            raise RuntimeError(f"Não foi possível gravar o estado {key}. Execute primeiro supabase_app_state.sql.")
 
     print(f"Fotos enviadas para o Supabase: {uploaded}")
     print(f"Estados migrados para o Supabase: {migrated_states}")
-    print("MigraÃ§Ã£o concluÃ­da. Nenhum token foi exibido na saÃ­da.")
+    print("Migração concluída. Nenhum token foi exibido na saída.")
 
 
 if __name__ == "__main__":
