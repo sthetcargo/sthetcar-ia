@@ -58,7 +58,7 @@ class VariablePhotoCountTests(unittest.TestCase):
             with patch("app.ai.gemini._client", return_value=object()), \
                  patch("app.ai.gemini._media_part", return_value="synthetic-image"), \
                  patch("app.ai.gemini._generate", return_value=(SimpleNamespace(text=""), "gemini-test")):
-                with self.assertRaisesRegex(RuntimeError, "Não retornou análise para o lote"):
+                with self.assertRaisesRegex(RuntimeError, "não retornou análise para o lote"):
                     analyze_before_after([before], [after])
 
     def test_arbitrary_photo_counts_split_with_no_loss_or_silent_truncation(self):
