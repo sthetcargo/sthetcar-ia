@@ -216,15 +216,15 @@
 
     <section class="card">
       <div class="card-head">
-        <div><h3>1. Criar conteúdo</h3><p>Envie até 6 fotos de ANTES e até 6 de DEPOIS. A IA analisará o conjunto completo.</p></div>
+        <div><h3>1. Criar conteúdo</h3><p>Selecione a quantidade de fotos de ANTES e DEPOIS necessária para o serviço. O total após compressão deve ficar em até 30 MB; a análise será feita em lotes para reduzir o uso de memória.</p></div>
         <span class="tag">✨ IA ASSISTIDA</span>
       </div>
       <form method="post" id="uploadForm" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="generate">
         <div class="upload-grid">
-          <div class="upload-box"><label><span class="upload-icon">📸</span><span>Mídia ANTES</span><small>Até 6 fotos</small></label><input type="file" name="before" accept="image/jpeg,image/png,image/webp" multiple required><div id="beforePreview" class="thumb-grid"></div><div class="photo-count" id="beforeCount">0/6 arquivos</div><div class="upload-total" id="beforeSize"><strong>0 MB</strong></div></div>
-          <div class="upload-box"><label><span class="upload-icon">✨</span><span>Mídia DEPOIS</span><small>Até 6 fotos</small></label><input type="file" name="after" accept="image/jpeg,image/png,image/webp" multiple required><div id="afterPreview" class="thumb-grid"></div><div class="photo-count" id="afterCount">0/6 arquivos</div><div class="upload-total" id="afterSize"><strong>0 MB</strong></div></div>
+          <div class="upload-box"><label><span class="upload-icon">📸</span><span>Mídia ANTES</span><small>Quantidade variável</small></label><input type="file" name="before" accept="image/jpeg,image/png,image/webp" multiple required><div id="beforePreview" class="thumb-grid"></div><div class="photo-count" id="beforeCount">0 fotos</div><div class="upload-total" id="beforeSize"><strong>0 MB</strong></div></div>
+          <div class="upload-box"><label><span class="upload-icon">✨</span><span>Mídia DEPOIS</span><small>Quantidade variável</small></label><input type="file" name="after" accept="image/jpeg,image/png,image/webp" multiple required><div id="afterPreview" class="thumb-grid"></div><div class="photo-count" id="afterCount">0 fotos</div><div class="upload-total" id="afterSize"><strong>0 MB</strong></div></div>
         </div>
         <div class="form-grid">
           <div class="field"><label>🚘 Veículo <span class="optional">(opcional)</span></label><input type="text" name="vehicle" placeholder="Ex.: Honda Civic 2020"></div>
@@ -361,7 +361,6 @@
   </main>
 
   <script>
-    const MAX_PHOTOS = 6;
     const MAX_TOTAL_MB = 30;
     const MAX_DIMENSION = 1280;
     const JPEG_QUALITY = 0.76;
@@ -393,21 +392,27 @@
       const dt=new DataTransfer();
       files.forEach(f=>dt.items.add(f));
       input.files=dt.files;
+      // Revoke all old preview URLs before replacing thumbnails to avoid memory
+      // accumulating as the user adds many photos.
+      preview.querySelectorAll('img,video').forEach(oldMedia=>{
+        const oldUrl=oldMedia.currentSrc || oldMedia.src || '';
+        if(oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+      });
       preview.innerHTML='';
       files.forEach((file,i)=>{
         const box=document.createElement('div'); box.className='thumb';
         const objectUrl=URL.createObjectURL(file);
         let media;
         if(file.type.startsWith('video/')){
-          media=document.createElement('video'); media.src=objectUrl; media.muted=true; media.playsInline=true; media.controls=true;
+          media=document.createElement('video'); media.src=objectUrl; media.muted=true; media.playsInline=true; media.controls=true; media.preload='metadata';
         }else{
-          media=document.createElement('img'); media.src=objectUrl;
+          media=document.createElement('img'); media.loading='lazy'; media.decoding='async'; media.src=objectUrl;
         }
         const b=document.createElement('button'); b.type='button'; b.textContent='×'; b.title='Remover';
-        b.onclick=()=>{state[side].splice(i,1); URL.revokeObjectURL(objectUrl); renderFiles(side); updateTotal();};
+        b.onclick=()=>{state[side].splice(i,1); renderFiles(side); updateTotal();};
         box.append(media,b); preview.appendChild(box);
       });
-      count.textContent=files.length+'/'+MAX_PHOTOS+' arquivos';
+      count.textContent=files.length+' foto'+(files.length===1?'':'s');
       size.innerHTML='<strong>'+formatMB(files.reduce((n,f)=>n+f.size,0))+'</strong>';
     }
 
@@ -416,7 +421,7 @@
       if(!input) return;
       input.addEventListener('change',()=>{
         const incoming=[...input.files];
-        state[side]=[...state[side],...incoming].slice(0,MAX_PHOTOS);
+        state[side]=[...state[side],...incoming];
         renderFiles(side);
         updateTotal();
       });

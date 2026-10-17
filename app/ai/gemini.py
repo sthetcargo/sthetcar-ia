@@ -205,50 +205,105 @@ def _generate(
         f"Último erro: {last_error}"
     )
 
+VISUAL_ANALYSIS_BATCH_SIZE = 4
+
+
 def analyze_before_after(before_paths, after_paths,
                          vehicle: str = "", service: str = "", notes: str = ""):
+    """Analyze variable-size photo sets in bounded batches without losing any image."""
+    if not before_paths or not after_paths:
+        raise ValueError("Envie pelo menos uma foto de ANTES e uma de DEPOIS.")
+
     client = _client()
+    total_groups = max(len(before_paths), len(after_paths))
+    batch_count = (total_groups + VISUAL_ANALYSIS_BATCH_SIZE - 1) // VISUAL_ANALYSIS_BATCH_SIZE
+    analyses = []
 
-    prompt = f"""
-    Você é o analista visual da Sthetcar Estética Automotiva.
+    for batch_index, start in enumerate(
+        range(0, total_groups, VISUAL_ANALYSIS_BATCH_SIZE), 1
+    ):
+        before_batch = before_paths[start:start + VISUAL_ANALYSIS_BATCH_SIZE]
+        after_batch = after_paths[start:start + VISUAL_ANALYSIS_BATCH_SIZE]
+        if not before_batch and not after_batch:
+            continue
 
-    Compare cuidadosamente o conjunto de imagens ANTES com o conjunto de imagens DEPOIS.
-    As imagens são pares de referência do mesmo serviço; use todos os ângulos disponíveis.
-    Identifique somente características visualmente observáveis.
-    NÃO invente serviços, produtos, técnicas ou resultados.
+        before_range = (
+            f"{start + 1}-{start + len(before_batch)}" if before_batch else "nenhuma neste lote"
+        )
+        after_range = (
+            f"{start + 1}-{start + len(after_batch)}" if after_batch else "nenhuma neste lote"
+        )
+        prompt = f"""
+Você é o analista visual da Sthetcar Estética Automotiva.
 
-    Dados fornecidos pelo usuário:
-    Veículo: {vehicle or "não informado"}
-    Serviço informado: {service or "não informado"}
-    Observações: {notes or "nenhuma"}
+Este é o LOTE {batch_index} DE {batch_count} de um atendimento que pode ter muitas fotos.
+Analise SOMENTE as fotos deste lote. Outras fotos do mesmo atendimento serão analisadas
+em outros lotes e os resultados serão reunidos depois. Não conclua que uma área inteira
+do veículo não foi atendida só porque ela não aparece neste conjunto.
 
-    Responda em português do Brasil, com:
-    1. RESUMO DA TRANSFORMAÇÃO
-    2. O QUE APARECE NO ANTES
-    3. O QUE APARECE NO DEPOIS
-    4. VEÍCULO IDENTIFICADO: informe marca/modelo somente se estiver visualmente claro; caso contrário, escreva "Não identificado".
-    5. SERVIÇO INFORMADO / SERVIÇO IDENTIFICÁVEL
-    6. CONFIANÇA: baixa, média ou alta
-    7. ALERTAS
+Fotos globais de ANTES incluídas: {before_range}.
+Fotos globais de DEPOIS incluídas: {after_range}.
+Compare cuidadosamente os ângulos disponíveis dos dois lados quando ambos estiverem
+presentes. Se este lote contiver fotos de apenas um lado, descreva apenas o que é observável
+e não invente uma comparação que as imagens deste lote não permitem.
 
-    Se o serviço não puder ser determinado pela imagem, escreva claramente:
-    "Não foi possível determinar o serviço somente pelas imagens."
-    """
+Identifique somente características visualmente observáveis. NÃO invente serviços,
+produtos, técnicas ou resultados.
 
-    contents = [prompt]
-    contents.append(f"=== FOTOS ANTES ({len(before_paths)}) ===")
-    for i, path in enumerate(before_paths, 1):
-        label = "VÍDEO" if path.suffix.lower() in {".mp4", ".mov"} else "FOTO"
-        contents.extend([f"{label} ANTES {i}", _media_part(path)])
-    contents.append(f"=== FOTOS DEPOIS ({len(after_paths)}) ===")
-    for i, path in enumerate(after_paths, 1):
-        label = "VÍDEO" if path.suffix.lower() in {".mp4", ".mov"} else "FOTO"
-        contents.extend([f"{label} DEPOIS {i}", _media_part(path)])
+Dados fornecidos pelo usuário:
+Veículo: {vehicle or "não informado"}
+Serviço informado: {service or "não informado"}
+Observações: {notes or "nenhuma"}
 
-    response, _ = _generate(
-        client, contents, temperature=0.4, max_output_tokens=1400
-    )
-    return _response_text(response) or "A IA não retornou uma análise."
+Responda em português do Brasil, de forma objetiva, com:
+1. RESUMO VISUAL DESTE LOTE
+2. O QUE APARECE NAS FOTOS DE ANTES
+3. O QUE APARECE NAS FOTOS DE DEPOIS
+4. VEÍCULO IDENTIFICADO: informe marca/modelo somente se estiver visualmente claro; caso contrário, escreva "Não identificado".
+5. SERVIÇO INFORMADO / SERVIÇO IDENTIFICÁVEL
+6. CONFIANÇA: baixa, média ou alta
+7. ALERTAS
+
+Se o serviço não puder ser determinado pelas imagens deste lote, diga isso claramente.
+"""
+
+        contents = [
+            prompt,
+            f"=== FOTOS ANTES ({len(before_batch)} deste lote) ===",
+        ]
+        for offset, path in enumerate(before_batch):
+            global_index = start + offset + 1
+            contents.extend([f"FOTO ANTES {global_index}", _media_part(path)])
+
+        contents.append(f"=== FOTOS DEPOIS ({len(after_batch)} deste lote) ===")
+        for offset, path in enumerate(after_batch):
+            global_index = start + offset + 1
+            contents.extend([f"FOTO DEPOIS {global_index}", _media_part(path)])
+
+        logger.info(
+            "Análise visual: lote %d/%d iniciado, antes=%d depois=%d",
+            batch_index, batch_count, len(before_batch), len(after_batch),
+        )
+        started_at = time.monotonic()
+        response, model = _generate(
+            client, contents, temperature=0.4, max_output_tokens=1400
+        )
+        result = (_response_text(response) or "").strip()
+        logger.info(
+            "Análise visual: lote %d/%d concluído em %.1f s, modelo=%s, resposta_chars=%d",
+            batch_index, batch_count, time.monotonic() - started_at, model, len(result),
+        )
+        if not result:
+            raise RuntimeError(
+                f"A IA não retornou análise para o lote {batch_index} de {batch_count}. "
+                "Nenhum post foi criado."
+            )
+        analyses.append(
+            f"ANÁLISE VISUAL — LOTE {batch_index}/{batch_count}\n"
+            f"Fotos ANTES: {before_range}; fotos DEPOIS: {after_range}.\n{result}"
+        )
+
+    return "\n\n".join(analyses)
 
 
 def _looks_like_caption(text: str):
