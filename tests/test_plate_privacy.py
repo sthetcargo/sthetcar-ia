@@ -40,6 +40,8 @@ class PlatePrivacyTests(unittest.TestCase):
         self.assertEqual(self.original.read_bytes(), self.original_bytes)
         self.assertEqual(summary["plate_redaction_version"], 2)
         self.assertEqual(summary["plate_redaction_count"], 1)
+        self.assertEqual(summary["plate_redaction_per_image_counts"], [1])
+        self.assertEqual(summary["plate_redaction_per_image_review_required"], [False])
         self.assertIn("borradas", summary["plate_redaction_message"])
 
         with Image.open(safe) as safe_image:
@@ -122,6 +124,8 @@ class PlatePrivacyTests(unittest.TestCase):
         self.assertNotEqual(safe_paths[0], self.original)
         self.assertEqual(self.original.read_bytes(), self.original_bytes)
         self.assertEqual(summary["plate_redaction_count"], 0)
+        self.assertEqual(summary["plate_redaction_per_image_counts"], [0])
+        self.assertEqual(summary["plate_redaction_per_image_review_required"], [False])
         self.assertIn("Revise todas as prévias", summary["plate_redaction_message"])
 
     def test_uncertain_result_without_box_fails_closed(self):
