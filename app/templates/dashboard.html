@@ -52,7 +52,7 @@
     @media(max-width:900px){.review-layout{grid-template-columns:1fr}.review-editor{position:static}.hero{display:block}.hero .tag{margin-top:15px}.meta-row{grid-template-columns:1fr}.ig-media img{height:220px}.history-grid{grid-template-columns:1fr}}
     @media(max-width:680px){.shell{padding:18px 14px 50px}.topbar{align-items:flex-start}.status-pill{font-size:11px}.hero h2{font-size:28px}.steps{overflow:auto}.step{font-size:11px}.connector{min-width:18px}.upload-grid,.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.card{padding:18px;border-radius:16px}.card-head{display:block}.card-head .tag{margin-top:12px}.approval-footer{display:block}.approval-footer .btn{width:100%;margin-top:12px}.ig-media img{height:180px}}
   
-    .upload-box label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.upload-box label small{width:100%;color:var(--muted);font-weight:600;font-size:11px;margin-left:38px}.thumb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.thumb-grid:empty{display:none}.thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#eef0f3}.thumb img,.thumb video{width:100%;height:100%;object-fit:cover}.thumb button{position:absolute;right:4px;top:4px;width:24px;height:24px;border:0;border-radius:50%;background:rgba(0,0,0,.72);color:#fff;cursor:pointer;font-weight:900}.photo-count{margin-top:8px;color:var(--muted);font-size:11px;font-weight:800}.upload-total{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f7f8fa;border:1px solid var(--border);color:#626a76;font-size:11px;font-weight:800}.upload-total strong{color:#20242b}.compress-note{margin-top:7px;color:#7d8590;font-size:11px;line-height:1.4}.upload-progress{display:none;margin-top:12px;padding:12px;border-radius:11px;background:#eef2ff;border:1px solid #d9e0ff;color:#3150b8;font-size:12px;font-weight:800}.upload-progress.show{display:block}.ig-media-grid.multi{display:block;max-height:none;overflow:visible}.ig-media-grid.multi .ig-photo-grid img,.ig-photo-grid video{object-fit:contain}.multi-history{display:grid;grid-template-columns:1fr 1fr;gap:8px}.history-side{border:1px solid var(--border);border-radius:10px;padding:8px}.history-thumb-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.history-thumb-row img,.history-thumb-row video{width:100%;aspect-ratio:4/3;object-fit:contain;background:#111;border-radius:7px}.history-side .history-label{position:static;display:inline-block;margin-bottom:6px}
+    .upload-box label{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.upload-box label small{width:100%;color:var(--muted);font-weight:600;font-size:11px;margin-left:38px}.thumb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.thumb-grid:empty{display:none}.thumb{position:relative;min-width:0;border-radius:10px;overflow:visible;background:transparent}.thumb img,.thumb video{width:100%;height:auto;aspect-ratio:1;object-fit:cover;display:block;border-radius:10px;background:#eef0f3}.thumb-category{display:block;width:100%;margin-top:5px;padding:6px 4px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:11px;color:var(--text)}.thumb button{position:absolute;right:4px;top:4px;width:24px;height:24px;border:0;border-radius:50%;background:rgba(0,0,0,.72);color:#fff;cursor:pointer;font-weight:900}.photo-count{margin-top:8px;color:var(--muted);font-size:11px;font-weight:800}.upload-total{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f7f8fa;border:1px solid var(--border);color:#626a76;font-size:11px;font-weight:800}.upload-total strong{color:#20242b}.compress-note{margin-top:7px;color:#7d8590;font-size:11px;line-height:1.4}.upload-progress{display:none;margin-top:12px;padding:12px;border-radius:11px;background:#eef2ff;border:1px solid #d9e0ff;color:#3150b8;font-size:12px;font-weight:800}.upload-progress.show{display:block}.ig-media-grid.multi{display:block;max-height:none;overflow:visible}.ig-media-grid.multi .ig-photo-grid img,.ig-photo-grid video{object-fit:contain}.multi-history{display:grid;grid-template-columns:1fr 1fr;gap:8px}.history-side{border:1px solid var(--border);border-radius:10px;padding:8px}.history-thumb-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.history-thumb-row img,.history-thumb-row video{width:100%;aspect-ratio:4/3;object-fit:contain;background:#111;border-radius:7px}.history-side .history-label{position:static;display:inline-block;margin-bottom:6px}
     @media(max-width:760px){.thumb-grid{grid-template-columns:repeat(3,1fr)}.ig-photo-grid{grid-template-columns:1fr}.multi-history{grid-template-columns:1fr}}
 .history-instagram{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:10px 13px;border:1px solid #cfd7ff;border-radius:11px;background:#f5f7ff;color:#2747c7;text-decoration:none;font-weight:900;font-size:12px}.history-instagram:hover{background:#eef2ff}
     .v26-dashboard{margin-bottom:18px}
@@ -226,6 +226,7 @@
           <div class="upload-box"><label><span class="upload-icon">📸</span><span>Mídia ANTES</span><small>Quantidade variável</small></label><input type="file" name="before" accept="image/jpeg,image/png,image/webp" multiple required><div id="beforePreview" class="thumb-grid"></div><div class="photo-count" id="beforeCount">0 fotos</div><div class="upload-total" id="beforeSize"><strong>0 MB</strong></div></div>
           <div class="upload-box"><label><span class="upload-icon">✨</span><span>Mídia DEPOIS</span><small>Quantidade variável</small></label><input type="file" name="after" accept="image/jpeg,image/png,image/webp" multiple required><div id="afterPreview" class="thumb-grid"></div><div class="photo-count" id="afterCount">0 fotos</div><div class="upload-total" id="afterSize"><strong>0 MB</strong></div></div>
         </div>
+        <div class="hint" style="margin-top:10px">🏷️ Em cada miniatura, escolha a área: Externa, Interna, Chassi ou Motor. Use “Geral / não separar” para manter todas as fotos em uma única publicação. Cada área selecionada precisa ter pelo menos uma foto de ANTES e uma de DEPOIS.</div>
         <div class="form-grid">
           <div class="field"><label>🚘 Veículo <span class="optional">(opcional)</span></label><input type="text" name="vehicle" placeholder="Ex.: Honda Civic 2020"></div>
           <div class="field"><label>🔧 Serviço realizado <span class="optional">(opcional)</span></label><input type="text" name="service" placeholder="Ex.: Polimento técnico"></div>
@@ -367,8 +368,17 @@
 
     const state = {
       before: [],
-      after: []
+      after: [],
+      beforeCategories: [],
+      afterCategories: []
     };
+    const photoCategoryOptions = [
+      {value:'geral', label:'Geral / não separar'},
+      {value:'externa', label:'Externa'},
+      {value:'interna', label:'Interna'},
+      {value:'chassi', label:'Chassi'},
+      {value:'motor', label:'Motor'}
+    ];
 
     function syncReviewIdentity(){
       const vehicle=document.getElementById('reviewVehicle');
@@ -389,6 +399,7 @@
       const count=document.getElementById(side+'Count');
       const size=document.getElementById(side+'Size');
       const files=state[side];
+      const categories=side==='before'?state.beforeCategories:state.afterCategories;
       const dt=new DataTransfer();
       files.forEach(f=>dt.items.add(f));
       input.files=dt.files;
@@ -408,9 +419,19 @@
         }else{
           media=document.createElement('img'); media.loading='lazy'; media.decoding='async'; media.src=objectUrl;
         }
+        const category=document.createElement('select');
+        category.className='thumb-category';
+        category.name=side+'_category';
+        category.setAttribute('aria-label',(side==='before'?'Categoria da foto ANTES ':'Categoria da foto DEPOIS ')+(i+1));
+        photoCategoryOptions.forEach(option=>{
+          const item=document.createElement('option');
+          item.value=option.value; item.textContent=option.label; category.appendChild(item);
+        });
+        category.value=categories[i]||'geral';
+        category.addEventListener('change',()=>{categories[i]=category.value;});
         const b=document.createElement('button'); b.type='button'; b.textContent='×'; b.title='Remover';
-        b.onclick=()=>{state[side].splice(i,1); renderFiles(side); updateTotal();};
-        box.append(media,b); preview.appendChild(box);
+        b.onclick=()=>{state[side].splice(i,1); categories.splice(i,1); renderFiles(side); updateTotal();};
+        box.append(media,category,b); preview.appendChild(box);
       });
       count.textContent=files.length+' foto'+(files.length===1?'':'s');
       size.innerHTML='<strong>'+formatMB(files.reduce((n,f)=>n+f.size,0))+'</strong>';
@@ -422,6 +443,8 @@
       input.addEventListener('change',()=>{
         const incoming=[...input.files];
         state[side]=[...state[side],...incoming];
+        const categories=side==='before'?state.beforeCategories:state.afterCategories;
+        incoming.forEach(()=>categories.push('geral'));
         renderFiles(side);
         updateTotal();
       });

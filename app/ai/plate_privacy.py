@@ -158,6 +158,8 @@ def create_plate_safe_copies(source_paths):
         total_plates = 0
         images_with_plates = 0
         manual_review_required = False
+        per_image_plate_counts = []
+        per_image_review_required = []
         for path, detection in zip(safe_paths, detections):
             if not isinstance(detection, dict) or not isinstance(detection.get("plates"), list):
                 raise PlatePrivacyError("O detector não retornou um resultado válido para cada foto.")
@@ -171,6 +173,8 @@ def create_plate_safe_copies(source_paths):
                     "Tente uma foto mais nítida ou com a placa mais visível."
                 )
 
+            per_image_plate_counts.append(len(plates))
+            per_image_review_required.append(needs_review)
             if plates:
                 with Image.open(path) as opened:
                     image = opened.convert("RGB")
@@ -200,6 +204,11 @@ def create_plate_safe_copies(source_paths):
             "plate_redaction_image_count": len(safe_paths),
             "plate_redaction_review_required": manual_review_required,
             "plate_redaction_message": message,
+            # These parallel arrays allow separate service-area posts to show an
+            # accurate privacy summary without claiming every group had the same
+            # number of detected plates. They contain only counts/booleans.
+            "plate_redaction_per_image_counts": per_image_plate_counts,
+            "plate_redaction_per_image_review_required": per_image_review_required,
         }
     except Exception as exc:
         for path in safe_paths:

@@ -290,7 +290,10 @@ assert "PLATE_DETECTION_BATCH_SIZE = 3" in privacy_source, "Plate detection must
 assert "_detect_license_plates(batch)" in privacy_source
 privacy_tests_source = (root / "tests" / "test_plate_privacy.py").read_text(encoding="utf-8")
 assert "test_plate_detection_batches_large_photo_sets" in privacy_tests_source
-assert "analyze_before_after(\n                        safe_before_paths, safe_after_paths" in dashboard_route_source, "Gemini analysis must use smaller protected copies, not larger originals"
+assert "analyze_before_after(" in dashboard_route_source
+assert "group_before_paths" in dashboard_route_source and "group_after_paths" in dashboard_route_source
+assert "safe_before_paths[index]" in dashboard_route_source and "safe_after_paths[index]" in dashboard_route_source
+
 for stage_marker in (
     "proteger placas", "analisar cópias protegidas", "enviar imagens ao armazenamento",
     "app.logger.exception", "create_request_id",
@@ -476,4 +479,53 @@ variable_photo_tests = (root / "tests" / "test_variable_photo_counts.py").read_t
 assert "test_visual_analysis_batches_all_photos_without_network_calls" in variable_photo_tests
 assert "test_arbitrary_photo_counts_split_with_no_loss_or_silent_truncation" in variable_photo_tests
 
-print("PASS: static integration checks, UTF-8 text, variable photo intake, bounded visual-analysis batches, dynamic publication splitting, Gemini config regression, structured plate detection, safe upload handling, runtime declarations, and Jinja templates.")
+
+# Per-photo service-area selection creates one reviewable post per category.
+category_module_path = root / "app" / "photo_categories.py"
+category_module_source = category_module_path.read_text(encoding="utf-8")
+category_tree = ast.parse(category_module_source, filename=str(category_module_path))
+category_functions = {
+    node.name: node for node in ast.walk(category_tree)
+    if isinstance(node, ast.FunctionDef)
+}
+assert {"normalize_photo_categories", "group_photo_indexes"} <= set(category_functions)
+category_group_source = ast.get_source_segment(category_module_source, category_functions["group_photo_indexes"])
+assert '"externa"' in category_module_source and '"interna"' in category_module_source
+assert '"chassi"' in category_module_source and '"motor"' in category_module_source
+assert "precisa ter pelo menos uma foto de " in category_group_source
+assert "ANTES e uma de DEPOIS" in category_group_source
+assert "normalize_photo_categories" in source
+assert 'request.form.getlist("before_category")' in source
+assert 'request.form.getlist("after_category")' in source
+assert "group_results = []" in source
+assert "approval_queue = pending_records + approval_queue" in source
+assert 'pending_id=pending_records[0]["pending_id"]' in source
+assert "service_category_label" in source and "service_group_count" in source
+for token in (
+    "const photoCategoryOptions =",
+    "category.name=side+'_category'",
+    "state.beforeCategories",
+    "state.afterCategories",
+    "Geral / não separar",
+    "Cada área selecionada precisa ter pelo menos uma foto de ANTES e uma de DEPOIS",
+):
+    assert token in dashboard_template, f"Missing photo category UI behavior: {token}"
+category_tests_source = (root / "tests" / "test_photo_categories.py").read_text(encoding="utf-8")
+for marker in (
+    "test_group_external_and_internal_photos_independently",
+    "test_supports_all_four_service_areas",
+    "test_general_selection_preserves_single_post_behavior",
+    "test_requires_before_and_after_per_category",
+    "test_every_photo_index_is_preserved_exactly_once",
+):
+    assert marker in category_tests_source, f"Missing service category test: {marker}"
+
+# The plate-privacy report must be sliced per service category instead of copying
+# the whole appointment's detection totals to every generated post.
+privacy_source = (root / "app" / "ai" / "plate_privacy.py").read_text(encoding="utf-8")
+assert "plate_redaction_per_image_counts" in privacy_source
+assert "plate_redaction_per_image_review_required" in privacy_source
+assert 'plate_redaction_per_image_counts", []' in source
+assert 'plate_redaction_per_image_review_required", []' in source
+
+print("PASS: static integration checks, UTF-8 text, variable photo intake, category-specific posts, batched visual analysis, dynamic publication splitting, Gemini config regression, structured plate detection, safe upload handling, runtime declarations, and Jinja templates.")

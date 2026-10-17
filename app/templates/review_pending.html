@@ -58,7 +58,7 @@
 @media(max-width:620px){.photo-lightbox{padding:12px}.photo-lightbox-content{height:94vh}.photo-lightbox-content img{max-height:calc(94vh - 58px)}.photo-lightbox-close{top:8px;right:8px;width:42px;height:42px}}
 </style></head>
 <body><main class="shell">
-<header class="top"><div><div class="brand">🚗 Sthetcar AI</div><div class="sub">Revisão e organização antes da aprovação</div></div><span class="badge">🕐 AGUARDANDO APROVAÇÃO</span></header>
+<header class="top"><div><div class="brand">🚗 Sthetcar AI</div><div class="sub">Revisão e organização antes da aprovação</div>{% if result.service_group_count|default(1) > 1 %}<div class="sub"><strong>Atendimento dividido em {{ result.service_group_count }} publicações · esta é a parte {{ result.service_group_index }}.</strong> As demais áreas aguardam revisão separada.</div>{% endif %}</div><span class="badge">🕐 AGUARDANDO APROVAÇÃO</span></header>
 {% if request.args.get("rewritten") %}<div class="success"><strong>Legenda reescrita com sucesso.</strong> A IA criou uma nova legenda e novas hashtags usando a mesma análise e as mesmas fotos.</div>{% elif rewrite_error or request.args.get("rewrite_error") %}<div class="warning"><strong>Não foi possível reescrever a legenda.</strong> {{ rewrite_error or request.args.get("rewrite_error") }}</div>{% endif %}<div class="success"><strong>Conteúdo preservado.</strong> A IA já terminou a análise e o trabalho ficou salvo. Você pode revisar, reorganizar ou descartar sem reenviar as fotos.</div>
 <div class="grid">
 <section class="card">
