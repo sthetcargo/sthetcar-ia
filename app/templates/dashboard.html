@@ -392,18 +392,24 @@
       const dt=new DataTransfer();
       files.forEach(f=>dt.items.add(f));
       input.files=dt.files;
+      // Revoke all old preview URLs before replacing thumbnails to avoid memory
+      // accumulating as the user adds many photos.
+      preview.querySelectorAll('img,video').forEach(oldMedia=>{
+        const oldUrl=oldMedia.currentSrc || oldMedia.src || '';
+        if(oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+      });
       preview.innerHTML='';
       files.forEach((file,i)=>{
         const box=document.createElement('div'); box.className='thumb';
         const objectUrl=URL.createObjectURL(file);
         let media;
         if(file.type.startsWith('video/')){
-          media=document.createElement('video'); media.src=objectUrl; media.muted=true; media.playsInline=true; media.controls=true;
+          media=document.createElement('video'); media.src=objectUrl; media.muted=true; media.playsInline=true; media.controls=true; media.preload='metadata';
         }else{
-          media=document.createElement('img'); media.src=objectUrl;
+          media=document.createElement('img'); media.loading='lazy'; media.decoding='async'; media.src=objectUrl;
         }
         const b=document.createElement('button'); b.type='button'; b.textContent='×'; b.title='Remover';
-        b.onclick=()=>{state[side].splice(i,1); URL.revokeObjectURL(objectUrl); renderFiles(side); updateTotal();};
+        b.onclick=()=>{state[side].splice(i,1); renderFiles(side); updateTotal();};
         box.append(media,b); preview.appendChild(box);
       });
       count.textContent=files.length+' foto'+(files.length===1?'':'s');
