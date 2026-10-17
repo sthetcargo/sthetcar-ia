@@ -453,4 +453,27 @@ for marker in (
 ):
     assert marker in plate_detection_tests, f"Missing plate-detection response test: {marker}"
 
-print("PASS: static integration checks, UTF-8 text, isolated vehicle/service inference, Gemini config regression, structured plate detection, safe oversized-upload handling, runtime/package declarations, and Jinja templates.")
+
+# Variable photo intake is limited by aggregate payload bytes, not a fixed per-side photo count.
+assert "MAX_PHOTOS_PER_SIDE" not in source, "Backend must not enforce a fixed per-side photo count"
+assert "MAX_PHOTOS" not in dashboard_template, "Browser must not silently truncate selected photos"
+assert "Quantidade variável" in dashboard_template
+assert "total após compressão deve ficar em até 30 MB" in dashboard_template
+assert "target[\"before_images\"] = before" in source and "target[\"after_images\"] = after" in source
+assert "target[\"before_images\"] = before[:MAX_PHOTOS_PER_SIDE]" not in source
+
+# Visual analysis must batch many images and preserve global image indexes in prompts.
+visual_analysis_node = next(
+    node for node in ast.walk(gemini_tree)
+    if isinstance(node, ast.FunctionDef) and node.name == "analyze_before_after"
+)
+visual_analysis_source = ast.get_source_segment(gemini_source, visual_analysis_node)
+assert "VISUAL_ANALYSIS_BATCH_SIZE = 4" in gemini_source
+assert "range(0, total_groups, VISUAL_ANALYSIS_BATCH_SIZE)" in visual_analysis_source
+assert "FOTO ANTES {global_index}" in visual_analysis_source
+assert "FOTO DEPOIS {global_index}" in visual_analysis_source
+variable_photo_tests = (root / "tests" / "test_variable_photo_counts.py").read_text(encoding="utf-8")
+assert "test_visual_analysis_batches_all_photos_without_network_calls" in variable_photo_tests
+assert "test_arbitrary_photo_counts_split_with_no_loss_or_silent_truncation" in variable_photo_tests
+
+print("PASS: static integration checks, UTF-8 text, variable photo intake, bounded visual-analysis batches, dynamic publication splitting, Gemini config regression, structured plate detection, safe upload handling, runtime declarations, and Jinja templates.")
