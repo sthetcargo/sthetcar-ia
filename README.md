@@ -6,6 +6,7 @@ Aplicativo Flask para preparar publicações de estética automotiva a partir de
 
 - Aceita quantidade variável de fotos de ANTES e DEPOIS (JPG, JPEG, PNG ou WEBP), limitada a 30 MB no total após a compressão do navegador.
 - Analisa a coleção visual em lotes de até 4 fotos por lado para limitar o tamanho de cada chamada à IA.
+- Cada foto pode ser marcada como Externa, Interna, Chassi, Motor ou Geral/não separar. Categorias com fotos de ANTES e DEPOIS geram rascunhos separados, cada um com legenda e aprovação próprias.
 - Carrosséis são divididos em partes de até 10 imagens pela Fila de Publicações; cada parte exige revisão e confirmação própria.
 - Comprime as imagens no navegador e cria cópias protegidas de publicação em JPEG quadrado de 1080 × 1080, preservando os arquivos originais.
 - A proteção de placas é uma ajuda de privacidade e precisa ser conferida visualmente; a detecção automática não é infalível.
