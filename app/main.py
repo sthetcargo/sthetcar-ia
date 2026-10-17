@@ -186,7 +186,6 @@ app.config.update(
 )
 
 app.config["MAX_CONTENT_LENGTH"] = 35 * 1024 * 1024
-MAX_PHOTOS_PER_SIDE = 6
 MAX_TOTAL_UPLOAD_BYTES = 30 * 1024 * 1024
 ALLOWED = {"jpg", "jpeg", "png", "webp", "mp4", "mov"}
 VIDEO_EXTENSIONS = {"mp4", "mov"}
@@ -1421,8 +1420,6 @@ def dashboard():
 
             if not before_files or not after_files:
                 error = "Envie pelo menos 1 mídia em ANTES e 1 mídia em DEPOIS."
-            elif len(before_files) > MAX_PHOTOS_PER_SIDE or len(after_files) > MAX_PHOTOS_PER_SIDE:
-                error = f"Você pode enviar até {MAX_PHOTOS_PER_SIDE} arquivos em cada lado."
             elif any(not allowed(f.filename) for f in before_files + after_files):
                 error = "Use JPG, JPEG, PNG ou WEBP."
             elif any(is_video_file(f.filename) for f in before_files + after_files):
@@ -2424,8 +2421,8 @@ def edit_publication_queue():
     if not before or not after:
         return redirect(url_for("publication_queue"))
 
-    target["before_images"] = before[:MAX_PHOTOS_PER_SIDE]
-    target["after_images"] = after[:MAX_PHOTOS_PER_SIDE]
+    target["before_images"] = before
+    target["after_images"] = after
     target.pop("before_image", None)
     target.pop("after_image", None)
     target["photo_order_updated_at"] = datetime.now().isoformat(timespec="seconds")
