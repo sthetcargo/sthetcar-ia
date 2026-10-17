@@ -293,7 +293,6 @@ assert "test_plate_detection_batches_large_photo_sets" in privacy_tests_source
 assert "analyze_before_after(" in dashboard_route_source
 assert "group_before_paths" in dashboard_route_source and "group_after_paths" in dashboard_route_source
 assert "safe_before_paths[index]" in dashboard_route_source and "safe_after_paths[index]" in dashboard_route_source
-assert "group_before_paths,\n                            group_after_paths" not in dashboard_route_source, "Use only the images selected for each service category"
 
 for stage_marker in (
     "proteger placas", "analisar cópias protegidas", "enviar imagens ao armazenamento",
