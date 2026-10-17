@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from app.time_utils import format_local_datetime
 from app.publication_split import split_photo_collections
+from app.photo_categories import group_photo_indexes, normalize_photo_categories
 import copy
 import difflib
 import json
@@ -1403,6 +1404,11 @@ def dashboard():
                     "plate_redaction_image_count": approved_pending.get("plate_redaction_image_count", 0),
                     "plate_redaction_review_required": bool(approved_pending.get("plate_redaction_review_required", False)),
                     "plate_redaction_message": approved_pending.get("plate_redaction_message", ""),
+                    "service_category": approved_pending.get("service_category", "geral"),
+                    "service_category_label": approved_pending.get("service_category_label", ""),
+                    "service_group_id": approved_pending.get("service_group_id", ""),
+                    "service_group_index": approved_pending.get("service_group_index", 1),
+                    "service_group_count": approved_pending.get("service_group_count", 1),
                 }
                 history.insert(0, history_item)
                 save_history(history)
@@ -1417,9 +1423,26 @@ def dashboard():
             vehicle = request.form.get("vehicle", "").strip()
             service = request.form.get("service", "").strip()
             notes = request.form.get("notes", "").strip()
+            raw_before_categories = request.form.getlist("before_category")
+            raw_after_categories = request.form.getlist("after_category")
+            photo_groups = []
+            category_error = ""
+            if before_files and after_files:
+                try:
+                    before_categories = normalize_photo_categories(
+                        raw_before_categories, len(before_files), "ANTES"
+                    )
+                    after_categories = normalize_photo_categories(
+                        raw_after_categories, len(after_files), "DEPOIS"
+                    )
+                    photo_groups = group_photo_indexes(before_categories, after_categories)
+                except ValueError as exc:
+                    category_error = str(exc)
 
             if not before_files or not after_files:
                 error = "Envie pelo menos 1 mídia em ANTES e 1 mídia em DEPOIS."
+            elif category_error:
+                error = category_error
             elif any(not allowed(f.filename) for f in before_files + after_files):
                 error = "Use JPG, JPEG, PNG ou WEBP."
             elif any(is_video_file(f.filename) for f in before_files + after_files):
@@ -1484,24 +1507,72 @@ def dashboard():
                         len(safe_paths),
                     )
 
-                    # Analyze already-downscaled and plate-protected copies, not the larger uploads.
-                    # This limits peak memory in Gemini while retaining all before/after angles.
-                    stage = "analisar cópias protegidas"
+                    # Analyze every service area independently so captions do not mix
+                    # exterior, interior, chassis, and engine work. Plate-protected copies
+                    # are already produced for the complete appointment.
+                    stage = "analisar cópias protegidas por categoria"
                     app.logger.info(
-                        "Criação de post [%s]: iniciando análise de %d foto(s) protegidas",
+                        "Criação de post [%s]: %d área(s) de serviço, %d foto(s) protegidas",
                         create_request_id,
-                        len(safe_before_paths) + len(safe_after_paths),
+                        len(photo_groups),
+                        len(safe_paths),
                     )
-                    analysis = analyze_before_after(
-                        safe_before_paths, safe_after_paths, vehicle, service, notes
-                    )
-                    app.logger.info(
-                        "Criação de post [%s]: análise visual concluída",
-                        create_request_id,
-                    )
+                    group_results = []
+                    for group_index, group in enumerate(photo_groups, 1):
+                        group_before_paths = [
+                            safe_before_paths[index] for index in group["before_indexes"]
+                        ]
+                        group_after_paths = [
+                            safe_after_paths[index] for index in group["after_indexes"]
+                        ]
+                        group_service = group["service"] if group["key"] != "geral" else service
+                        group_notes_parts = [notes] if notes else []
+                        if group["key"] != "geral":
+                            group_notes_parts.append(
+                                f"Este post deve se concentrar somente na área {group['label']}. "
+                                "Não atribua a esta área serviços que não apareçam nas fotos."
+                            )
+                            if service:
+                                group_notes_parts.append(
+                                    f"Contexto geral informado para o atendimento: {service}. "
+                                    "Use somente os detalhes pertinentes à categoria deste post."
+                                )
+                        group_notes = "\n\n".join(group_notes_parts)
+                        app.logger.info(
+                            "Criação de post [%s]: analisando categoria %s (%d antes, %d depois)",
+                            create_request_id,
+                            group["key"],
+                            len(group_before_paths),
+                            len(group_after_paths),
+                        )
+                        analysis = analyze_before_after(
+                            group_before_paths,
+                            group_after_paths,
+                            vehicle,
+                            group_service,
+                            group_notes,
+                        )
+                        resolved_vehicle = vehicle or infer_vehicle(analysis)
+                        resolved_service = group_service or infer_service(analysis)
+                        stage = f"gerar legenda da categoria {group['key']}"
+                        post = generate_post(
+                            analysis, resolved_vehicle, resolved_service, group_notes
+                        )
+                        caption, hashtags = split_post(
+                            post, resolved_vehicle, resolved_service
+                        )
+                        group_results.append({
+                            "group": group,
+                            "analysis": analysis,
+                            "post": post,
+                            "caption": caption,
+                            "hashtags": hashtags,
+                            "vehicle": resolved_vehicle,
+                            "service": resolved_service,
+                        })
 
-                    # Preserve originals in storage for future re-editing, but point all previews
-                    # and publication flows at the redacted copies only.
+                    # Upload each original and protected copy exactly once. Each categorized
+                    # pending post refers only to the subset assigned to that category.
                     stage = "enviar imagens ao armazenamento"
                     before_original_urls = [_remote_ref_for_local(path, "before") for path in before_paths]
                     after_original_urls = [_remote_ref_for_local(path, "after") for path in after_paths]
@@ -1511,40 +1582,118 @@ def dashboard():
                         "Criação de post [%s]: envio ao armazenamento concluído",
                         create_request_id,
                     )
-                    # If the user left these fields blank, use only conservative
-                    # labels that are explicitly supported by the visual analysis.
-                    stage = "gerar legenda"
-                    app.logger.info("Criação de post [%s]: iniciando geração da legenda", create_request_id)
-                    resolved_vehicle = vehicle or infer_vehicle(analysis)
-                    resolved_service = service or infer_service(analysis)
-                    post = generate_post(analysis, resolved_vehicle, resolved_service, notes)
-                    caption, hashtags = split_post(post, resolved_vehicle, resolved_service)
 
+                    per_image_plate_counts = plate_redaction.get(
+                        "plate_redaction_per_image_counts", []
+                    )
+                    per_image_review_required = plate_redaction.get(
+                        "plate_redaction_per_image_review_required", []
+                    )
+                    pending_records = []
+                    for group_index, group_result in enumerate(group_results, 1):
+                        group = group_result["group"]
+                        before_indexes = group["before_indexes"]
+                        after_indexes = group["after_indexes"]
+                        group_before_urls = [before_urls[index] for index in before_indexes]
+                        group_after_urls = [after_urls[index] for index in after_indexes]
+                        group_before_original_urls = [
+                            before_original_urls[index] for index in before_indexes
+                        ]
+                        group_after_original_urls = [
+                            after_original_urls[index] for index in after_indexes
+                        ]
+                        combined_indexes = before_indexes + [
+                            len(before_paths) + index for index in after_indexes
+                        ]
+                        group_plate_count = sum(
+                            per_image_plate_counts[index]
+                            for index in combined_indexes
+                            if index < len(per_image_plate_counts)
+                        )
+                        group_images_with_plates = sum(
+                            1 for index in combined_indexes
+                            if index < len(per_image_plate_counts)
+                            and per_image_plate_counts[index] > 0
+                        )
+                        group_review_required = any(
+                            per_image_review_required[index]
+                            for index in combined_indexes
+                            if index < len(per_image_review_required)
+                        )
+                        if group_plate_count:
+                            group_plate_message = (
+                                f"Foram detectadas e borradas {group_plate_count} placa(s) em "
+                                f"{group_images_with_plates} foto(s) desta categoria. "
+                                "Revise todas as prévias; a detecção automática pode falhar."
+                            )
+                        else:
+                            group_plate_message = (
+                                "Nenhuma placa foi detectada automaticamente nesta categoria. "
+                                "Revise todas as prévias, pois a detecção automática pode falhar."
+                            )
+                        if group_review_required:
+                            group_plate_message += (
+                                " A IA sinalizou uma ou mais imagens para conferência humana."
+                            )
+                        result = {
+                            "analysis": group_result["analysis"],
+                            "post": group_result["post"],
+                            "caption": group_result["caption"],
+                            "hashtags": group_result["hashtags"],
+                            "before_images": group_before_urls,
+                            "after_images": group_after_urls,
+                            "before_images_original": group_before_original_urls,
+                            "after_images_original": group_after_original_urls,
+                            "plate_redaction_version": plate_redaction.get("plate_redaction_version", 2),
+                            "plate_redaction_count": group_plate_count,
+                            "plate_redaction_image_count": len(combined_indexes),
+                            "plate_redaction_review_required": group_review_required,
+                            "plate_redaction_message": group_plate_message,
+                            "before_image": group_before_urls[0],
+                            "after_image": group_after_urls[0],
+                            "vehicle": group_result["vehicle"],
+                            "service": group_result["service"],
+                            "service_category": group["key"],
+                            "service_category_label": group["label"],
+                            "service_group_id": create_request_id,
+                            "service_group_index": group_index,
+                            "service_group_count": len(group_results),
+                        }
+                        pending = {
+                            **result,
+                            "pending_id": new_pending_id(),
+                            "created_at": datetime.now().isoformat(timespec="seconds"),
+                            "status": "AGUARDANDO APROVAÇÃO",
+                        }
+                        pending_records.append(pending)
+
+                    if len(pending_records) > 1:
+                        # One appointment can produce several independent posts, but
+                        # no category is approved/published automatically.
+                        approval_queue = pending_records + approval_queue
+                        save_approval_queue(approval_queue)
+                        app.logger.info(
+                            "Criação de post [%s]: %d publicações separadas aguardam revisão",
+                            create_request_id,
+                            len(pending_records),
+                        )
+                        return redirect(url_for(
+                            "review_pending",
+                            pending_id=pending_records[0]["pending_id"],
+                        ))
+
+                    pending = pending_records[0]
                     result = {
-                        "analysis": analysis,
-                        "post": post,
-                        "caption": caption,
-                        "hashtags": hashtags,
-                        "before_images": before_urls,
-                        "after_images": after_urls,
-                        "before_images_original": before_original_urls,
-                        "after_images_original": after_original_urls,
-                        **plate_redaction,
-                        "before_image": before_urls[0],
-                        "after_image": after_urls[0],
-                        "vehicle": resolved_vehicle,
-                        "service": resolved_service,
-                    }
-                    pending = {
-                        **result,
-                        "pending_id": new_pending_id(),
-                        "created_at": datetime.now().isoformat(timespec="seconds"),
-                        "status": "AGUARDANDO APROVAÃ‡ÃƒO",
+                        key: value for key, value in pending.items()
+                        if key not in {"pending_id", "created_at", "status"}
                     }
                     approval_queue.insert(0, pending)
                     save_approval_queue(approval_queue)
                     result["pending_id"] = pending["pending_id"]
-                    app.logger.info("Criação de post [%s]: concluída com sucesso", create_request_id)
+                    app.logger.info(
+                        "Criação de post [%s]: concluída com sucesso, 1 publicação aguardando revisão",
+                        create_request_id,
+                    )
                 except Exception as exc:
                     app.logger.exception(
                         "Falha ao criar post [%s], etapa=%s, tipo=%s",
