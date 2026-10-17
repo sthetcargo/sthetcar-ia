@@ -290,7 +290,11 @@ assert "PLATE_DETECTION_BATCH_SIZE = 3" in privacy_source, "Plate detection must
 assert "_detect_license_plates(batch)" in privacy_source
 privacy_tests_source = (root / "tests" / "test_plate_privacy.py").read_text(encoding="utf-8")
 assert "test_plate_detection_batches_large_photo_sets" in privacy_tests_source
-assert "analyze_before_after(\n                        safe_before_paths, safe_after_paths" in dashboard_route_source, "Gemini analysis must use smaller protected copies, not larger originals"
+assert "analyze_before_after(" in dashboard_route_source
+assert "group_before_paths" in dashboard_route_source and "group_after_paths" in dashboard_route_source
+assert "safe_before_paths[index]" in dashboard_route_source and "safe_after_paths[index]" in dashboard_route_source
+assert "group_before_paths,\n                            group_after_paths" not in dashboard_route_source, "Use only the images selected for each service category"
+
 for stage_marker in (
     "proteger placas", "analisar cópias protegidas", "enviar imagens ao armazenamento",
     "app.logger.exception", "create_request_id",
