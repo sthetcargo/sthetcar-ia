@@ -489,7 +489,8 @@ assert {"normalize_photo_categories", "group_photo_indexes"} <= set(category_fun
 category_group_source = ast.get_source_segment(category_module_source, category_functions["group_photo_indexes"])
 assert '"externa"' in category_module_source and '"interna"' in category_module_source
 assert '"chassi"' in category_module_source and '"motor"' in category_module_source
-assert "precisa ter pelo menos uma foto de ANTES e uma de DEPOIS" in category_group_source
+assert "precisa ter pelo menos uma foto de " in category_group_source
+assert "ANTES e uma de DEPOIS" in category_group_source
 assert "normalize_photo_categories" in source
 assert 'request.form.getlist("before_category")' in source
 assert 'request.form.getlist("after_category")' in source
