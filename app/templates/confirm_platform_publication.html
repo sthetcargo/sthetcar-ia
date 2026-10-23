@@ -44,6 +44,7 @@ button:disabled{opacity:.65;cursor:wait}
   <section class="card">
     <h2>Post que será publicado</h2>
     <p><strong>{{ post.vehicle or 'Veículo não informado' }}</strong> · {{ post.service or 'Serviço não informado' }}</p>
+    {% if post.publication_series_label %}<p class="muted">🔗 {{ post.publication_series_title }} · {{ post.publication_series_label }}</p>{% endif %}
     <div class="notice" role="note">🛡️ <strong>Privacidade das placas:</strong> {{ post.plate_redaction_message }} Revise visualmente todas as fotos antes de confirmar. A detecção automática pode não localizar placas muito pequenas, distantes ou parcialmente ocultas.</div>
     {% set preview_before_images = post.facebook_before_images_override if ('facebook' in selected_platforms and post.facebook_before_images_override) else (post.before_images or ([post.before_image] if post.before_image else [])) %}
     <div class="photos">
