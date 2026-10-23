@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from app.time_utils import format_local_datetime
 from app.publication_split import split_photo_collections
 from app.photo_categories import group_photo_indexes, normalize_photo_categories
+from app.series_publication import build_series_badge_image, build_series_caption, build_series_title
 import copy
 import difflib
 import json
@@ -396,6 +397,49 @@ def _remote_ref_for_local(path, side):
     remote_path = f"{remote_side}/{path.name}"
     upload_file(path, remote_path)
     return make_remote_ref(remote_path)
+
+
+def _create_series_badge_ref(image_ref, vehicle, service, part_number, part_count):
+    """Upload a labeled derivative of the first BEFORE image without altering source media."""
+    token = secrets.token_hex(12)
+    remote_path = f"before/series_badges/{token}.jpg"
+    temporary_path = GENERATED_DIR / f"series_badge_{token}.jpg"
+    try:
+        if is_remote_ref(image_ref):
+            source_path = remote_path_from_ref(image_ref)
+            source_url = signed_url(source_path, 900)
+            if not source_url:
+                raise RuntimeError("Não foi possível gerar um endereço temporário para a foto protegida.")
+            with urllib.request.urlopen(source_url, timeout=20) as response:
+                image_bytes = response.read(15 * 1024 * 1024 + 1)
+            if len(image_bytes) > 15 * 1024 * 1024:
+                raise RuntimeError("A foto protegida excede o limite seguro para criar o selo.")
+        else:
+            local_source = _find_local_image(image_ref, "before")
+            if local_source is None:
+                raise RuntimeError("A foto protegida não foi encontrada para criar o selo da sequência.")
+            image_bytes = local_source.read_bytes()
+
+        badge_bytes = build_series_badge_image(
+            image_bytes, vehicle, service, part_number, part_count
+        )
+        temporary_path.write_bytes(badge_bytes)
+        upload_file(temporary_path, remote_path)
+        return make_remote_ref(remote_path)
+    except Exception as exc:
+        app.logger.exception(
+            "Falha ao criar selo visual da sequência: part=%s/%s type=%s",
+            part_number, part_count, type(exc).__name__,
+        )
+        raise RuntimeError(
+            "Não foi possível preparar o selo visual da sequência. "
+            "Nenhuma publicação foi feita; tente novamente ou revise os logs."
+        ) from exc
+    finally:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def ensure_remote_image_ref(value, side):
@@ -1409,6 +1453,12 @@ def dashboard():
                     "service_group_id": approved_pending.get("service_group_id", ""),
                     "service_group_index": approved_pending.get("service_group_index", 1),
                     "service_group_count": approved_pending.get("service_group_count", 1),
+                    "publication_series_title": approved_pending.get("publication_series_title", ""),
+                    "publication_series_label": approved_pending.get("publication_series_label", ""),
+                    "publication_part_number": approved_pending.get("publication_part_number"),
+                    "publication_part_count": approved_pending.get("publication_part_count"),
+                    "series_badge_enabled": bool(approved_pending.get("series_badge_enabled", False)),
+                    "series_label_note": approved_pending.get("series_label_note", ""),
                 }
                 history.insert(0, history_item)
                 save_history(history)
@@ -1571,6 +1621,35 @@ def dashboard():
                             "service": resolved_service,
                         })
 
+                    # When one appointment creates several service-specific posts, use the
+                    # same public series title and explicitly point to the next service.
+                    series_count = len(group_results)
+                    series_title = ""
+                    if series_count > 1:
+                        series_vehicle = vehicle or group_results[0]["vehicle"]
+                        series_title = build_series_title(series_vehicle)
+                        for series_index, group_result in enumerate(group_results, 1):
+                            group_result["vehicle"] = series_vehicle
+                            next_service = (
+                                group_results[series_index]["service"]
+                                if series_index < series_count else None
+                            )
+                            group_result["caption"] = build_series_caption(
+                                group_result["caption"],
+                                series_vehicle,
+                                group_result["service"],
+                                series_index,
+                                series_count,
+                                next_service=next_service,
+                                hashtags=group_result["hashtags"],
+                            )
+                            group_result["series_title"] = series_title
+                            group_result["series_label"] = (
+                                f"Parte {series_index}/{series_count} · {group_result['service']}"
+                            )
+                            group_result["series_part_number"] = series_index
+                            group_result["series_part_count"] = series_count
+
                     # Upload each original and protected copy exactly once. Each categorized
                     # pending post refers only to the subset assigned to that category.
                     stage = "enviar imagens ao armazenamento"
@@ -1596,6 +1675,15 @@ def dashboard():
                         after_indexes = group["after_indexes"]
                         group_before_urls = [before_urls[index] for index in before_indexes]
                         group_after_urls = [after_urls[index] for index in after_indexes]
+                        series_badge_enabled = len(group_results) > 1
+                        if series_badge_enabled:
+                            group_before_urls[0] = _create_series_badge_ref(
+                                group_before_urls[0],
+                                group_result["vehicle"],
+                                group_result["service"],
+                                group_index,
+                                len(group_results),
+                            )
                         group_before_original_urls = [
                             before_original_urls[index] for index in before_indexes
                         ]
@@ -1658,6 +1746,12 @@ def dashboard():
                             "service_group_id": create_request_id,
                             "service_group_index": group_index,
                             "service_group_count": len(group_results),
+                            "publication_series_title": group_result.get("series_title", ""),
+                            "publication_series_label": group_result.get("series_label", ""),
+                            "publication_part_number": group_result.get("series_part_number"),
+                            "publication_part_count": group_result.get("series_part_count"),
+                            "series_badge_enabled": series_badge_enabled,
+                            "series_label_note": "",
                         }
                         pending = {
                             **result,
