@@ -145,19 +145,16 @@ def build_series_badge_image(image_bytes, vehicle, service, part_number, part_co
     if width < 1 or height < 1:
         raise ValueError("A imagem da sequência está vazia.")
 
-    # Keep the added strip small. For the square normalized Instagram photos this
-    # makes the overall aspect ratio about 0.9, within Instagram's portrait bounds.
-    max_band_for_square_ratio = max(0, int(width / 0.8 - height))
-    if max_band_for_square_ratio < 24:
-        raise ValueError("A proporção desta foto não permite adicionar o selo com segurança.")
-    band_height = min(max(48, int(width * 0.12)), max_band_for_square_ratio)
-
+    # Keep the original aspect ratio so every carousel slide remains compatible.
+    # The source photo is scaled proportionally into the area below the banner;
+    # it is never cropped or painted over, and the full output canvas stays the
+    # same dimensions/aspect ratio as the source photo.
+    band_height = min(max(24, int(width * 0.12)), max(24, int(height * 0.20)))
     title = " ".join(str(series_title or build_series_title(vehicle)).split()).strip().upper()
     service_text = " ".join(str(service or "Serviço automotivo").split()).strip().upper()
     subtitle = f"PARTE {part_number}/{part_count} · {service_text}"
 
-    canvas = Image.new("RGB", (width, height + band_height), (20, 24, 32))
-    canvas.paste(photo, (0, band_height))
+    canvas = Image.new("RGB", (width, height), (20, 24, 32))
     draw = ImageDraw.Draw(canvas)
     draw.rectangle((0, 0, width, band_height - 1), fill=(20, 24, 32))
     draw.rectangle((0, band_height - 4, width, band_height - 1), fill=(49, 91, 234))
@@ -177,10 +174,16 @@ def build_series_badge_image(image_bytes, vehicle, service, part_number, part_co
 
     title_font = fit_font(title, max(10, int(width * 0.034)))
     subtitle_font = fit_font(subtitle, max(9, int(width * 0.029)))
-    title_y = max(4, int(band_height * 0.14))
-    subtitle_y = max(title_y + 18, int(band_height * 0.54))
+    title_y = max(3, int(band_height * 0.10))
+    subtitle_y = max(title_y + 12, int(band_height * 0.53))
     draw.text((padding, title_y), title, font=title_font, fill=(255, 255, 255))
     draw.text((padding, subtitle_y), subtitle, font=subtitle_font, fill=(220, 230, 255))
+
+    photo_area_height = max(1, height - band_height)
+    photo.thumbnail((width, photo_area_height), Image.Resampling.LANCZOS)
+    photo_x = (width - photo.width) // 2
+    photo_y = band_height + (photo_area_height - photo.height) // 2
+    canvas.paste(photo, (photo_x, photo_y))
 
     output = BytesIO()
     canvas.save(output, format="JPEG", quality=92, optimize=True)
