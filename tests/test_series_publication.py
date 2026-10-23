@@ -87,12 +87,11 @@ class SeriesPublicationTests(unittest.TestCase):
             original_bytes, "Corolla", "Lavagem externa", 1, 2
         )
         with Image.open(io.BytesIO(original_bytes)) as original, Image.open(io.BytesIO(result)) as labeled:
-            self.assertEqual(labeled.width, original.width)
-            self.assertGreater(labeled.height, original.height)
+            self.assertEqual(labeled.size, original.size, "Badge must not change carousel aspect ratio")
             self.assertGreaterEqual(labeled.width / labeled.height, 0.8)
             self.assertLessEqual(labeled.width / labeled.height, 1.91)
-            # The source image is pasted whole below the label; its center remains red.
-            center = labeled.getpixel((labeled.width // 2, labeled.height - original.height // 2))
+            # The full source photo is scaled into the area below the banner, not cropped.
+            center = labeled.getpixel((labeled.width // 2, labeled.height // 2 + 12))
             self.assertGreater(center[0], 170)
             self.assertLess(center[1], 90)
             header = labeled.getpixel((5, 5))
