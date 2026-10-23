@@ -1466,6 +1466,8 @@ def dashboard():
                     "publication_part_number": approved_pending.get("publication_part_number"),
                     "publication_part_count": approved_pending.get("publication_part_count"),
                     "series_badge_enabled": bool(approved_pending.get("series_badge_enabled", False)),
+                    "series_badge_source_ref": approved_pending.get("series_badge_source_ref", ""),
+                    "series_badge_image_ref": approved_pending.get("series_badge_image_ref", ""),
                     "series_label_note": approved_pending.get("series_label_note", ""),
                 }
                 history.insert(0, history_item)
@@ -1684,14 +1686,18 @@ def dashboard():
                         group_before_urls = [before_urls[index] for index in before_indexes]
                         group_after_urls = [after_urls[index] for index in after_indexes]
                         series_badge_enabled = len(group_results) > 1
+                        series_badge_source_ref = ""
+                        series_badge_image_ref = ""
                         if series_badge_enabled:
-                            group_before_urls[0] = _create_series_badge_ref(
-                                group_before_urls[0],
+                            series_badge_source_ref = group_before_urls[0]
+                            series_badge_image_ref = _create_series_badge_ref(
+                                series_badge_source_ref,
                                 group_result["vehicle"],
                                 group_result["service"],
                                 group_index,
                                 len(group_results),
                             )
+                            group_before_urls[0] = series_badge_image_ref
                         group_before_original_urls = [
                             before_original_urls[index] for index in before_indexes
                         ]
@@ -1759,6 +1765,8 @@ def dashboard():
                             "publication_part_number": group_result.get("series_part_number"),
                             "publication_part_count": group_result.get("series_part_count"),
                             "series_badge_enabled": series_badge_enabled,
+                            "series_badge_source_ref": series_badge_source_ref,
+                            "series_badge_image_ref": series_badge_image_ref,
                             "series_label_note": "",
                         }
                         pending = {
