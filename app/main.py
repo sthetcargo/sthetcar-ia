@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from app.time_utils import format_local_datetime
 from app.publication_split import split_photo_collections
 from app.photo_categories import group_photo_indexes, normalize_photo_categories
+from app.series_publication import build_series_badge_image, build_series_caption, build_series_title
 import copy
 import difflib
 import json
@@ -398,6 +399,50 @@ def _remote_ref_for_local(path, side):
     return make_remote_ref(remote_path)
 
 
+def _create_series_badge_ref(image_ref, vehicle, service, part_number, part_count, series_title=None):
+    """Upload a labeled derivative of the first BEFORE image without altering source media."""
+    token = secrets.token_hex(12)
+    remote_path = f"before/series_badges/{token}.jpg"
+    temporary_path = GENERATED_DIR / f"series_badge_{token}.jpg"
+    try:
+        if is_remote_ref(image_ref):
+            source_path = remote_path_from_ref(image_ref)
+            source_url = signed_url(source_path, 900)
+            if not source_url:
+                raise RuntimeError("Não foi possível gerar um endereço temporário para a foto protegida.")
+            with urllib.request.urlopen(source_url, timeout=20) as response:
+                image_bytes = response.read(15 * 1024 * 1024 + 1)
+            if len(image_bytes) > 15 * 1024 * 1024:
+                raise RuntimeError("A foto protegida excede o limite seguro para criar o selo.")
+        else:
+            local_source = _find_local_image(image_ref, "before")
+            if local_source is None:
+                raise RuntimeError("A foto protegida não foi encontrada para criar o selo da sequência.")
+            image_bytes = local_source.read_bytes()
+
+        badge_bytes = build_series_badge_image(
+            image_bytes, vehicle, service, part_number, part_count,
+            series_title=series_title,
+        )
+        temporary_path.write_bytes(badge_bytes)
+        upload_file(temporary_path, remote_path)
+        return make_remote_ref(remote_path)
+    except Exception as exc:
+        app.logger.exception(
+            "Falha ao criar selo visual da sequência: part=%s/%s type=%s",
+            part_number, part_count, type(exc).__name__,
+        )
+        raise RuntimeError(
+            "Não foi possível preparar o selo visual da sequência. "
+            "Nenhuma publicação foi feita; tente novamente ou revise os logs."
+        ) from exc
+    finally:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def ensure_remote_image_ref(value, side):
     if not value:
         return ""
@@ -636,14 +681,21 @@ def facebook_graph_request(path, access_token, params=None, data=None, method="G
 
 def facebook_media_urls(post):
     """Resolve approved photos to signed URLs; the Facebook flow deliberately excludes video."""
-    before = [x for x in (post.get("before_images") or [post.get("before_image")]) if x]
-    after = [x for x in (post.get("after_images") or [post.get("after_image")]) if x]
+    facebook_post = post
+    if post.get("facebook_before_images_override"):
+        facebook_post = dict(post)
+        facebook_post["before_images"] = list(post.get("facebook_before_images_override") or [])
+        facebook_post["before_image"] = (
+            facebook_post["before_images"][0] if facebook_post["before_images"] else ""
+        )
+    before = [x for x in (facebook_post.get("before_images") or [facebook_post.get("before_image")]) if x]
+    after = [x for x in (facebook_post.get("after_images") or [facebook_post.get("after_image")]) if x]
     if len(before) + len(after) > 10:
         raise RuntimeError(
             f"Esta publicação tem {len(before) + len(after)} fotos. "
             "Divida-a em partes na Fila de Publicações antes de publicar no Facebook."
         )
-    items = instagram_media_items(post)
+    items = instagram_media_items(facebook_post)
     if any(str(item.get("media_type", "")).upper() != "IMAGE" for item in items):
         raise RuntimeError("A publicação no Facebook aceita somente fotos neste fluxo. O fluxo do Instagram permanece separado.")
     urls = [str(item.get("url", "")).strip() for item in items if str(item.get("url", "")).strip()]
@@ -653,7 +705,7 @@ def facebook_media_urls(post):
 
 
 def build_full_caption(post):
-    caption = (post.get("caption") or "").strip()
+    caption = (post.get("facebook_caption_override") or post.get("caption") or "").strip()
     hashtags = (post.get("hashtags") or "").strip()
     if not hashtags:
         hashtags = fallback_hashtags(post.get("vehicle", ""), post.get("service", ""))
@@ -1409,6 +1461,14 @@ def dashboard():
                     "service_group_id": approved_pending.get("service_group_id", ""),
                     "service_group_index": approved_pending.get("service_group_index", 1),
                     "service_group_count": approved_pending.get("service_group_count", 1),
+                    "publication_series_title": approved_pending.get("publication_series_title", ""),
+                    "publication_series_label": approved_pending.get("publication_series_label", ""),
+                    "publication_part_number": approved_pending.get("publication_part_number"),
+                    "publication_part_count": approved_pending.get("publication_part_count"),
+                    "series_badge_enabled": bool(approved_pending.get("series_badge_enabled", False)),
+                    "series_badge_source_ref": approved_pending.get("series_badge_source_ref", ""),
+                    "series_badge_image_ref": approved_pending.get("series_badge_image_ref", ""),
+                    "series_label_note": approved_pending.get("series_label_note", ""),
                 }
                 history.insert(0, history_item)
                 save_history(history)
@@ -1571,6 +1631,35 @@ def dashboard():
                             "service": resolved_service,
                         })
 
+                    # When one appointment creates several service-specific posts, use the
+                    # same public series title and explicitly point to the next service.
+                    series_count = len(group_results)
+                    series_title = ""
+                    if series_count > 1:
+                        series_vehicle = vehicle or group_results[0]["vehicle"]
+                        series_title = build_series_title(series_vehicle)
+                        for series_index, group_result in enumerate(group_results, 1):
+                            group_result["vehicle"] = series_vehicle
+                            next_service = (
+                                group_results[series_index]["service"]
+                                if series_index < series_count else None
+                            )
+                            group_result["caption"] = build_series_caption(
+                                group_result["caption"],
+                                series_vehicle,
+                                group_result["service"],
+                                series_index,
+                                series_count,
+                                next_service=next_service,
+                                hashtags=group_result["hashtags"],
+                            )
+                            group_result["series_title"] = series_title
+                            group_result["series_label"] = (
+                                f"Parte {series_index}/{series_count} · {group_result['service']}"
+                            )
+                            group_result["series_part_number"] = series_index
+                            group_result["series_part_count"] = series_count
+
                     # Upload each original and protected copy exactly once. Each categorized
                     # pending post refers only to the subset assigned to that category.
                     stage = "enviar imagens ao armazenamento"
@@ -1596,6 +1685,19 @@ def dashboard():
                         after_indexes = group["after_indexes"]
                         group_before_urls = [before_urls[index] for index in before_indexes]
                         group_after_urls = [after_urls[index] for index in after_indexes]
+                        series_badge_enabled = len(group_results) > 1
+                        series_badge_source_ref = ""
+                        series_badge_image_ref = ""
+                        if series_badge_enabled:
+                            series_badge_source_ref = group_before_urls[0]
+                            series_badge_image_ref = _create_series_badge_ref(
+                                series_badge_source_ref,
+                                group_result["vehicle"],
+                                group_result["service"],
+                                group_index,
+                                len(group_results),
+                            )
+                            group_before_urls[0] = series_badge_image_ref
                         group_before_original_urls = [
                             before_original_urls[index] for index in before_indexes
                         ]
@@ -1658,6 +1760,14 @@ def dashboard():
                             "service_group_id": create_request_id,
                             "service_group_index": group_index,
                             "service_group_count": len(group_results),
+                            "publication_series_title": group_result.get("series_title", ""),
+                            "publication_series_label": group_result.get("series_label", ""),
+                            "publication_part_number": group_result.get("series_part_number"),
+                            "publication_part_count": group_result.get("series_part_count"),
+                            "series_badge_enabled": series_badge_enabled,
+                            "series_badge_source_ref": series_badge_source_ref,
+                            "series_badge_image_ref": series_badge_image_ref,
+                            "series_label_note": "",
                         }
                         pending = {
                             **result,
@@ -2506,6 +2616,12 @@ def publication_queue():
             "queue_status": queue_status,
             "split_count": len(item.get("split_children") or []),
             "split_pending_facebook": bool(item.get("split_pending_facebook", False)),
+            "publication_series_title": item.get("publication_series_title", ""),
+            "publication_series_label": item.get("publication_series_label", ""),
+            "publication_part_number": item.get("publication_part_number"),
+            "publication_part_count": item.get("publication_part_count"),
+            "series_badge_enabled": bool(item.get("series_badge_enabled", False)),
+            "series_label_note": item.get("series_label_note", ""),
         }
         if queue_status == "DESCARTADO":
             discarded.append(record)
@@ -2654,6 +2770,12 @@ def split_publication_in_queue():
     for part_number, part in enumerate(parts, 1):
         part_before = list(part["before_images"])
         part_after = list(part["after_images"])
+        existing_badge_ref = str(parent.get("series_badge_image_ref", "") or "")
+        existing_badge_source_ref = str(parent.get("series_badge_source_ref", "") or "")
+        part_before_base = [
+            existing_badge_source_ref if existing_badge_ref and image_ref == existing_badge_ref else image_ref
+            for image_ref in part_before
+        ]
         part_before_original = source_before_original[
             before_original_offset:before_original_offset + len(part_before)
         ]
@@ -2684,9 +2806,79 @@ def split_publication_in_queue():
         child["after_image"] = part_after[0] if part_after else ""
         child["before_images_original"] = list(part_before_original)
         child["after_images_original"] = list(part_after_original)
-        child["caption"] = (
-            f"{str(parent.get('caption', '')).strip()}\n\nParte {part_number} de {len(parts)} desta transformação."
-        ).strip()
+
+        service_text = str(parent.get("service", "") or "serviço automotivo").strip()
+        vehicle_text = str(parent.get("vehicle", "") or "").strip()
+        series_title = build_series_title(vehicle_text)
+        if int(parent.get("service_group_count", 1) or 1) > 1:
+            series_title = f"{series_title} · {service_text}"
+        part_caption = build_series_caption(
+            parent.get("caption", ""),
+            vehicle_text,
+            service_text,
+            part_number,
+            len(parts),
+            next_service=service_text if part_number < len(parts) else None,
+            hashtags=parent.get("hashtags", ""),
+            series_title=series_title,
+        )
+        child["publication_series_title"] = series_title
+        child["publication_series_label"] = (
+            f"Parte {part_number}/{len(parts)} · {service_text}"
+        )
+        child["publication_part_number"] = part_number
+        child["publication_part_count"] = len(parts)
+        already_published_first_part = part_number == 1 and instagram_already_published
+        child.pop("facebook_caption_override", None)
+        child.pop("facebook_before_images_override", None)
+        if already_published_first_part:
+            # Never pretend the historical Instagram caption/photo was updated:
+            # this part already exists online and must not be published again.
+            child["caption"] = str(parent.get("caption", "") or "").strip()
+            child["series_badge_enabled"] = False
+            child["series_label_note"] = (
+                "A parte 1 já estava publicada no Instagram antes dos rótulos da série. "
+                "Ela não será reenviada nem alterada no Instagram; a versão do Facebook "
+                "receberá o selo e a legenda da sequência."
+            )
+            try:
+                facebook_badge = _create_series_badge_ref(
+                    part_before_base[0], vehicle_text, service_text, part_number, len(parts),
+                    series_title=series_title,
+                )
+            except Exception:
+                app.logger.exception("Não foi possível criar o selo da parte %s/%s", part_number, len(parts))
+                return redirect(url_for(
+                    "publication_queue",
+                    queue_error="Não foi possível criar o selo visual da sequência. A divisão não foi salva e o post original foi preservado.",
+                ))
+            child["facebook_before_images_override"] = list(part_before_base)
+            child["facebook_before_images_override"][0] = facebook_badge
+            child["facebook_caption_override"] = part_caption
+            child["series_badge_source_ref"] = part_before_base[0]
+            child["series_badge_image_ref"] = part_before[0] if existing_badge_ref and part_before[0] == existing_badge_ref else ""
+            child["series_badge_enabled"] = True
+        else:
+            child["caption"] = part_caption
+            child["before_images"] = list(part_before_base)
+            child["before_image"] = child["before_images"][0] if child["before_images"] else ""
+            try:
+                new_badge = _create_series_badge_ref(
+                    part_before_base[0], vehicle_text, service_text, part_number, len(parts),
+                    series_title=series_title,
+                )
+            except Exception:
+                app.logger.exception("Não foi possível criar o selo da parte %s/%s", part_number, len(parts))
+                return redirect(url_for(
+                    "publication_queue",
+                    queue_error="Não foi possível criar o selo visual da sequência. A divisão não foi salva e o post original foi preservado.",
+                ))
+            child["series_badge_source_ref"] = part_before_base[0]
+            child["series_badge_image_ref"] = new_badge
+            child["before_images"][0] = new_badge
+            child["before_image"] = new_badge
+            child["series_badge_enabled"] = True
+            child["series_label_note"] = ""
         child["plate_redaction_message"] = (
             f"Parte {part_number} de {len(parts)}. Esta publicação usa {len(part_before) + len(part_after)} "
             "cópia(s) de mídia protegidas. Revise todas as prévias; a detecção automática pode falhar."

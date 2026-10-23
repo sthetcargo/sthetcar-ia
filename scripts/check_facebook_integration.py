@@ -528,4 +528,50 @@ assert "plate_redaction_per_image_review_required" in privacy_source
 assert 'plate_redaction_per_image_counts", []' in source
 assert 'plate_redaction_per_image_review_required", []' in source
 
-print("PASS: static integration checks, UTF-8 text, variable photo intake, category-specific posts, batched visual analysis, dynamic publication splitting, Gemini config regression, structured plate detection, safe upload handling, runtime declarations, and Jinja templates.")
+# Public-facing continuity labels for category posts and max-10-photo split posts.
+series_module_path = root / "app" / "series_publication.py"
+series_module_source = series_module_path.read_text(encoding="utf-8")
+series_tree = ast.parse(series_module_source, filename=str(series_module_path))
+series_functions = {
+    node.name: node for node in ast.walk(series_tree)
+    if isinstance(node, ast.FunctionDef)
+}
+assert {"build_series_title", "build_series_caption", "build_series_badge_image"} <= set(series_functions)
+assert "Parte {part_number}/{part_count}" in series_module_source
+assert "Na próxima publicação:" in series_module_source
+assert "Esta é a última parte desta transformação" in series_module_source
+assert "photo.thumbnail((width, photo_area_height), Image.Resampling.LANCZOS)" in series_module_source
+assert "canvas.paste(photo, (photo_x, photo_y))" in series_module_source
+assert 'Image.new("RGB", (width, height)' in series_module_source, "Badge must preserve carousel aspect ratio"
+assert "quality=92" in series_module_source
+assert "build_series_caption(" in source
+assert "_create_series_badge_ref(" in source
+assert 'child["publication_series_title"]' in source
+assert 'child["facebook_caption_override"]' in source
+assert 'child["facebook_before_images_override"]' in source
+assert "facebook_before_images_override" in ast.get_source_segment(source, function_nodes["facebook_media_urls"])
+assert "facebook_caption_override" in ast.get_source_segment(source, function_nodes["build_full_caption"])
+
+series_tests_source = (root / "tests" / "test_series_publication.py").read_text(encoding="utf-8")
+for marker in (
+    "test_category_caption_names_current_and_next_service",
+    "test_last_part_has_closing_message",
+    "test_same_service_parts_point_to_next_number",
+    "test_badge_adds_a_separate_header_without_cropping_source_photo",
+    "test_invalid_series_part_numbers_are_rejected",
+):
+    assert marker in series_tests_source, f"Missing public series test: {marker}"
+
+publication_queue_template_path = root / "app" / "templates" / "publication_queue.html"
+publication_queue_template = publication_queue_template_path.read_text(encoding="utf-8")
+Environment().parse(publication_queue_template)
+assert "publication_series_label" in publication_queue_template
+assert "series_label_note" in publication_queue_template
+review_pending_template = (root / "app" / "templates" / "review_pending.html").read_text(encoding="utf-8")
+Environment().parse(review_pending_template)
+assert "service_group_count" in review_pending_template
+assert "publication_series_label" in dashboard_template
+assert "publication_series_label" in confirm_template
+assert "facebook_before_images_override" in confirm_template
+
+print("PASS: static integration checks, UTF-8 text, variable photo intake, category-specific posts, public series captions and image badges, batched visual analysis, dynamic publication splitting, Gemini config regression, structured plate detection, safe upload handling, runtime declarations, and Jinja templates.")
