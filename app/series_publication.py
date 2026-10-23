@@ -46,6 +46,7 @@ def build_series_caption(
     next_service=None,
     hashtags="",
     max_chars=2200,
+    series_title=None,
 ):
     """Add a consistent series heading and useful continuation CTA.
 
@@ -61,7 +62,7 @@ def build_series_caption(
     service_text = " ".join(str(service or "").split()).strip()
     if not service_text:
         service_text = "serviço automotivo"
-    title = build_series_title(vehicle_text)
+    title = " ".join(str(series_title or build_series_title(vehicle_text)).split()).strip()
     heading = f"🚗 {title} — Parte {part_number}/{part_count}: {service_text}"
 
     next_service_text = " ".join(str(next_service or "").split()).strip()
@@ -120,7 +121,7 @@ def _load_font(size):
     return ImageFont.load_default()
 
 
-def build_series_badge_image(image_bytes, vehicle, service, part_number, part_count):
+def build_series_badge_image(image_bytes, vehicle, service, part_number, part_count, series_title=None):
     """Create a new labeled image by adding a banner above the full original photo.
 
     No part of the source photo is cropped or painted over. The caller stores this
@@ -151,7 +152,7 @@ def build_series_badge_image(image_bytes, vehicle, service, part_number, part_co
         raise ValueError("A proporção desta foto não permite adicionar o selo com segurança.")
     band_height = min(max(48, int(width * 0.12)), max_band_for_square_ratio)
 
-    title = build_series_title(vehicle).upper()
+    title = " ".join(str(series_title or build_series_title(vehicle)).split()).strip().upper()
     service_text = " ".join(str(service or "Serviço automotivo").split()).strip().upper()
     subtitle = f"PARTE {part_number}/{part_count} · {service_text}"
 
