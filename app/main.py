@@ -399,7 +399,7 @@ def _remote_ref_for_local(path, side):
     return make_remote_ref(remote_path)
 
 
-def _create_series_badge_ref(image_ref, vehicle, service, part_number, part_count):
+def _create_series_badge_ref(image_ref, vehicle, service, part_number, part_count, series_title=None):
     """Upload a labeled derivative of the first BEFORE image without altering source media."""
     token = secrets.token_hex(12)
     remote_path = f"before/series_badges/{token}.jpg"
@@ -421,7 +421,8 @@ def _create_series_badge_ref(image_ref, vehicle, service, part_number, part_coun
             image_bytes = local_source.read_bytes()
 
         badge_bytes = build_series_badge_image(
-            image_bytes, vehicle, service, part_number, part_count
+            image_bytes, vehicle, service, part_number, part_count,
+            series_title=series_title,
         )
         temporary_path.write_bytes(badge_bytes)
         upload_file(temporary_path, remote_path)
@@ -2785,9 +2786,58 @@ def split_publication_in_queue():
         child["after_image"] = part_after[0] if part_after else ""
         child["before_images_original"] = list(part_before_original)
         child["after_images_original"] = list(part_after_original)
-        child["caption"] = (
-            f"{str(parent.get('caption', '')).strip()}\n\nParte {part_number} de {len(parts)} desta transformação."
-        ).strip()
+
+        service_text = str(parent.get("service", "") or "serviço automotivo").strip()
+        vehicle_text = str(parent.get("vehicle", "") or "").strip()
+        series_title = build_series_title(vehicle_text)
+        if int(parent.get("service_group_count", 1) or 1) > 1:
+            series_title = f"{series_title} · {service_text}"
+        part_caption = build_series_caption(
+            parent.get("caption", ""),
+            vehicle_text,
+            service_text,
+            part_number,
+            len(parts),
+            next_service=service_text if part_number < len(parts) else None,
+            hashtags=parent.get("hashtags", ""),
+            series_title=series_title,
+        )
+        child["publication_series_title"] = series_title
+        child["publication_series_label"] = (
+            f"Parte {part_number}/{len(parts)} · {service_text}"
+        )
+        child["publication_part_number"] = part_number
+        child["publication_part_count"] = len(parts)
+        already_published_first_part = part_number == 1 and instagram_already_published
+        child.pop("facebook_caption_override", None)
+        child.pop("facebook_before_images_override", None)
+        if already_published_first_part:
+            # Never pretend the historical Instagram caption/photo was updated:
+            # this part already exists online and must not be published again.
+            child["caption"] = str(parent.get("caption", "") or "").strip()
+            child["series_badge_enabled"] = False
+            child["series_label_note"] = (
+                "A parte 1 já estava publicada no Instagram antes dos rótulos da série. "
+                "Ela não será reenviada nem alterada no Instagram; a versão do Facebook "
+                "receberá o selo e a legenda da sequência."
+            )
+            facebook_badge = _create_series_badge_ref(
+                part_before[0], vehicle_text, service_text, part_number, len(parts),
+                series_title=series_title,
+            )
+            child["facebook_before_images_override"] = list(part_before)
+            child["facebook_before_images_override"][0] = facebook_badge
+            child["facebook_caption_override"] = part_caption
+            child["series_badge_enabled"] = True
+        else:
+            child["caption"] = part_caption
+            child["before_images"][0] = _create_series_badge_ref(
+                part_before[0], vehicle_text, service_text, part_number, len(parts),
+                series_title=series_title,
+            )
+            child["before_image"] = child["before_images"][0]
+            child["series_badge_enabled"] = True
+            child["series_label_note"] = ""
         child["plate_redaction_message"] = (
             f"Parte {part_number} de {len(parts)}. Esta publicação usa {len(part_before) + len(part_after)} "
             "cópia(s) de mídia protegidas. Revise todas as prévias; a detecção automática pode falhar."
