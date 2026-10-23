@@ -2770,6 +2770,12 @@ def split_publication_in_queue():
     for part_number, part in enumerate(parts, 1):
         part_before = list(part["before_images"])
         part_after = list(part["after_images"])
+        existing_badge_ref = str(parent.get("series_badge_image_ref", "") or "")
+        existing_badge_source_ref = str(parent.get("series_badge_source_ref", "") or "")
+        part_before_base = [
+            existing_badge_source_ref if existing_badge_ref and image_ref == existing_badge_ref else image_ref
+            for image_ref in part_before
+        ]
         part_before_original = source_before_original[
             before_original_offset:before_original_offset + len(part_before)
         ]
@@ -2835,21 +2841,42 @@ def split_publication_in_queue():
                 "Ela não será reenviada nem alterada no Instagram; a versão do Facebook "
                 "receberá o selo e a legenda da sequência."
             )
-            facebook_badge = _create_series_badge_ref(
-                part_before[0], vehicle_text, service_text, part_number, len(parts),
-                series_title=series_title,
-            )
-            child["facebook_before_images_override"] = list(part_before)
+            try:
+                facebook_badge = _create_series_badge_ref(
+                    part_before_base[0], vehicle_text, service_text, part_number, len(parts),
+                    series_title=series_title,
+                )
+            except Exception:
+                app.logger.exception("Não foi possível criar o selo da parte %s/%s", part_number, len(parts))
+                return redirect(url_for(
+                    "publication_queue",
+                    queue_error="Não foi possível criar o selo visual da sequência. A divisão não foi salva e o post original foi preservado.",
+                ))
+            child["facebook_before_images_override"] = list(part_before_base)
             child["facebook_before_images_override"][0] = facebook_badge
             child["facebook_caption_override"] = part_caption
+            child["series_badge_source_ref"] = part_before_base[0]
+            child["series_badge_image_ref"] = part_before[0] if existing_badge_ref and part_before[0] == existing_badge_ref else ""
             child["series_badge_enabled"] = True
         else:
             child["caption"] = part_caption
-            child["before_images"][0] = _create_series_badge_ref(
-                part_before[0], vehicle_text, service_text, part_number, len(parts),
-                series_title=series_title,
-            )
-            child["before_image"] = child["before_images"][0]
+            child["before_images"] = list(part_before_base)
+            child["before_image"] = child["before_images"][0] if child["before_images"] else ""
+            try:
+                new_badge = _create_series_badge_ref(
+                    part_before_base[0], vehicle_text, service_text, part_number, len(parts),
+                    series_title=series_title,
+                )
+            except Exception:
+                app.logger.exception("Não foi possível criar o selo da parte %s/%s", part_number, len(parts))
+                return redirect(url_for(
+                    "publication_queue",
+                    queue_error="Não foi possível criar o selo visual da sequência. A divisão não foi salva e o post original foi preservado.",
+                ))
+            child["series_badge_source_ref"] = part_before_base[0]
+            child["series_badge_image_ref"] = new_badge
+            child["before_images"][0] = new_badge
+            child["before_image"] = new_badge
             child["series_badge_enabled"] = True
             child["series_label_note"] = ""
         child["plate_redaction_message"] = (
