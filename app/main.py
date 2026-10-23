@@ -680,14 +680,21 @@ def facebook_graph_request(path, access_token, params=None, data=None, method="G
 
 def facebook_media_urls(post):
     """Resolve approved photos to signed URLs; the Facebook flow deliberately excludes video."""
-    before = [x for x in (post.get("before_images") or [post.get("before_image")]) if x]
-    after = [x for x in (post.get("after_images") or [post.get("after_image")]) if x]
+    facebook_post = post
+    if post.get("facebook_before_images_override"):
+        facebook_post = dict(post)
+        facebook_post["before_images"] = list(post.get("facebook_before_images_override") or [])
+        facebook_post["before_image"] = (
+            facebook_post["before_images"][0] if facebook_post["before_images"] else ""
+        )
+    before = [x for x in (facebook_post.get("before_images") or [facebook_post.get("before_image")]) if x]
+    after = [x for x in (facebook_post.get("after_images") or [facebook_post.get("after_image")]) if x]
     if len(before) + len(after) > 10:
         raise RuntimeError(
             f"Esta publicação tem {len(before) + len(after)} fotos. "
             "Divida-a em partes na Fila de Publicações antes de publicar no Facebook."
         )
-    items = instagram_media_items(post)
+    items = instagram_media_items(facebook_post)
     if any(str(item.get("media_type", "")).upper() != "IMAGE" for item in items):
         raise RuntimeError("A publicação no Facebook aceita somente fotos neste fluxo. O fluxo do Instagram permanece separado.")
     urls = [str(item.get("url", "")).strip() for item in items if str(item.get("url", "")).strip()]
@@ -697,7 +704,7 @@ def facebook_media_urls(post):
 
 
 def build_full_caption(post):
-    caption = (post.get("caption") or "").strip()
+    caption = (post.get("facebook_caption_override") or post.get("caption") or "").strip()
     hashtags = (post.get("hashtags") or "").strip()
     if not hashtags:
         hashtags = fallback_hashtags(post.get("vehicle", ""), post.get("service", ""))
