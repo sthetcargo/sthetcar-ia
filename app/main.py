@@ -2608,6 +2608,12 @@ def publication_queue():
             "queue_status": queue_status,
             "split_count": len(item.get("split_children") or []),
             "split_pending_facebook": bool(item.get("split_pending_facebook", False)),
+            "publication_series_title": item.get("publication_series_title", ""),
+            "publication_series_label": item.get("publication_series_label", ""),
+            "publication_part_number": item.get("publication_part_number"),
+            "publication_part_count": item.get("publication_part_count"),
+            "series_badge_enabled": bool(item.get("series_badge_enabled", False)),
+            "series_label_note": item.get("series_label_note", ""),
         }
         if queue_status == "DESCARTADO":
             discarded.append(record)
