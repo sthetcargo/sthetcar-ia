@@ -540,7 +540,9 @@ assert {"build_series_title", "build_series_caption", "build_series_badge_image"
 assert "Parte {part_number}/{part_count}" in series_module_source
 assert "Na próxima publicação:" in series_module_source
 assert "Esta é a última parte desta transformação" in series_module_source
-assert "canvas.paste(photo, (0, band_height))" in series_module_source, "Badge must add a separate banner and preserve the full photo"
+assert "photo.thumbnail((width, photo_area_height), Image.Resampling.LANCZOS)" in series_module_source
+assert "canvas.paste(photo, (photo_x, photo_y))" in series_module_source
+assert 'Image.new("RGB", (width, height)' in series_module_source, "Badge must preserve carousel aspect ratio"
 assert "quality=92" in series_module_source
 assert "build_series_caption(" in source
 assert "_create_series_badge_ref(" in source
