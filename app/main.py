@@ -4,6 +4,7 @@ from app.time_utils import format_local_datetime
 from app.publication_split import split_photo_collections
 from app.photo_categories import group_photo_indexes, normalize_photo_categories
 from app.series_publication import build_series_badge_image, build_series_caption, build_series_title
+from app.meta_rate_limit import format_rate_limit_message, is_meta_rate_limit_error, make_rate_limit_state, seconds_remaining
 import copy
 import difflib
 import json
@@ -42,6 +43,7 @@ DISCARDED_PATH = GENERATED_DIR / "posts_descartados.json"
 PUBLICATION_DISCARDED_PATH = GENERATED_DIR / "posts_publicacao_descartados.json"
 FACEBOOK_CONNECTION_PATH = GENERATED_DIR / "facebook_connection.json"
 FACEBOOK_PUBLICATION_AUDIT_FILE = GENERATED_DIR / "publicacoes_facebook.json"
+META_API_RATE_LIMIT_PATH = GENERATED_DIR / "meta_api_rate_limit.json"
 
 for folder in (BEFORE_DIR, AFTER_DIR, GENERATED_DIR):
     folder.mkdir(parents=True, exist_ok=True)
@@ -216,6 +218,8 @@ OPTIONAL_STATE_DEFAULTS = {
     # New Facebook keys are optional until the owner connects the Page.
     "facebook_connection": {},
     "facebook_publication_audit": [],
+    # Meta rate-limit state is operational metadata, not publication content.
+    "meta_api_rate_limit": {},
 }
 
 
@@ -272,6 +276,68 @@ def _save_state(key, path, data):
     # diverging the local and cloud copies.
     save_cloud_state(key, data)
     _write_local_json(path, data)
+
+
+_META_API_RATE_LIMIT_CACHE = {}
+_META_API_RATE_LIMIT_CACHE_CHECKED_AT = 0.0
+_META_API_RATE_LIMIT_CACHE_TTL_SECONDS = 10.0
+
+
+def _load_meta_api_rate_limit_state(force_refresh=False):
+    """Read the shared cooldown with a short per-worker cache to avoid extra DB/API traffic."""
+    global _META_API_RATE_LIMIT_CACHE, _META_API_RATE_LIMIT_CACHE_CHECKED_AT
+    now = time.monotonic()
+    if (
+        not force_refresh
+        and now - _META_API_RATE_LIMIT_CACHE_CHECKED_AT < _META_API_RATE_LIMIT_CACHE_TTL_SECONDS
+    ):
+        return dict(_META_API_RATE_LIMIT_CACHE) if isinstance(_META_API_RATE_LIMIT_CACHE, dict) else {}
+
+    try:
+        value = load_cloud_state("meta_api_rate_limit")
+        state = value if isinstance(value, dict) else {}
+        if value is not None:
+            _write_local_json(META_API_RATE_LIMIT_PATH, state)
+    except Exception as exc:
+        # This file stores only temporary cooldown metadata. It is safe to use it
+        # as a fallback if the shared state service itself is briefly unavailable.
+        app.logger.warning(
+            "Could not read shared Meta API cooldown; using local operational cache (%s)",
+            type(exc).__name__,
+        )
+        value = _read_local_json(META_API_RATE_LIMIT_PATH, {})
+        state = value if isinstance(value, dict) else {}
+
+    _META_API_RATE_LIMIT_CACHE = dict(state)
+    _META_API_RATE_LIMIT_CACHE_CHECKED_AT = now
+    return dict(state)
+
+
+def _save_meta_api_rate_limit_state(state):
+    """Persist cooldown across Render workers while retaining a safe local fallback."""
+    global _META_API_RATE_LIMIT_CACHE, _META_API_RATE_LIMIT_CACHE_CHECKED_AT
+    safe_state = dict(state) if isinstance(state, dict) else {}
+    _META_API_RATE_LIMIT_CACHE = safe_state
+    _META_API_RATE_LIMIT_CACHE_CHECKED_AT = time.monotonic()
+    try:
+        save_cloud_state("meta_api_rate_limit", safe_state)
+        _write_local_json(META_API_RATE_LIMIT_PATH, safe_state)
+    except Exception as exc:
+        app.logger.warning(
+            "Could not persist shared Meta API cooldown; local operational cache retained (%s)",
+            type(exc).__name__,
+        )
+        try:
+            _write_local_json(META_API_RATE_LIMIT_PATH, safe_state)
+        except Exception:
+            app.logger.exception("Could not write local Meta API cooldown cache")
+
+
+def _raise_if_meta_api_cooldown_active():
+    state = _load_meta_api_rate_limit_state()
+    if seconds_remaining(state) > 0:
+        message = format_rate_limit_message(state)
+        raise RuntimeError(message or "A Meta limitou temporariamente as chamadas. Aguarde antes de tentar novamente.")
 
 
 def instagram_config():
@@ -645,17 +711,29 @@ def _http_json_request(url, data=None, method="GET", timeout=60, api_label="Inst
     if data is not None:
         payload = urllib.parse.urlencode(data).encode("utf-8")
         headers["Content-Type"] = "application/x-www-form-urlencoded"
+    if api_label in {"Instagram API", "Facebook Graph API"}:
+        _raise_if_meta_api_cooldown_active()
+
     req = urllib.request.Request(url, data=payload, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             body = response.read().decode("utf-8")
-            return json.loads(body) if body else {}
+            result = json.loads(body) if body else {}
+            if api_label in {"Instagram API", "Facebook Graph API"} and is_meta_rate_limit_error(result):
+                state = make_rate_limit_state(result, getattr(response, "headers", None))
+                _save_meta_api_rate_limit_state(state)
+                raise RuntimeError(format_rate_limit_message(state))
+            return result
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         try:
             detail = json.loads(body)
         except json.JSONDecodeError:
             detail = {"raw": body}
+        if api_label in {"Instagram API", "Facebook Graph API"} and is_meta_rate_limit_error(detail):
+            state = make_rate_limit_state(detail, getattr(exc, "headers", None))
+            _save_meta_api_rate_limit_state(state)
+            raise RuntimeError(format_rate_limit_message(state)) from exc
         raise RuntimeError(f"{api_label} {exc.code}: {json.dumps(detail, ensure_ascii=False)}") from exc
 
 
@@ -993,21 +1071,27 @@ def instagram_media_urls(post):
 
 
 def _wait_for_container(connection, container_id, timeout=120):
-    started = datetime.now().timestamp()
+    """Poll processing status with exponential backoff to conserve Graph API calls."""
+    deadline = time.monotonic() + max(1, int(timeout))
+    delay = 2
     last = {}
-    while datetime.now().timestamp() - started < timeout:
+    while time.monotonic() < deadline:
         last = instagram_container_status(connection, container_id)
         status = (last.get("status_code") or "").upper()
         if status in {"FINISHED", "PUBLISHED"}:
             return last
         if status in {"ERROR", "EXPIRED"}:
             raise RuntimeError(f"Instagram não conseguiu processar a mídia: {status} {last.get('status', '')}".strip())
-        import time
-        time.sleep(4)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(delay, remaining))
+        delay = min(12, delay * 2)
+
     status = (last.get("status_code") or "status desconhecido").upper()
     raise RuntimeError(
         f"O Instagram ainda está processando a mídia ({status}) após {timeout} segundos. "
-        "O rascunho foi preservado; tente preparar e testar novamente em alguns instantes."
+        "O rascunho foi preservado. Não repita imediatamente; aguarde antes de testar novamente."
     )
 
 

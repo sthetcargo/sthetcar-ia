@@ -552,6 +552,36 @@ assert 'child["facebook_before_images_override"]' in source
 assert "facebook_before_images_override" in ast.get_source_segment(source, function_nodes["facebook_media_urls"])
 assert "facebook_caption_override" in ast.get_source_segment(source, function_nodes["build_full_caption"])
 
+# Meta Graph API rate-limit handling: detect throttles, persist shared cooldown,
+# show safe user guidance, and reduce container-status polling traffic.
+rate_limit_module_path = root / "app" / "meta_rate_limit.py"
+rate_limit_module_source = rate_limit_module_path.read_text(encoding="utf-8")
+rate_limit_tree = ast.parse(rate_limit_module_source, filename=str(rate_limit_module_path))
+rate_limit_functions = {
+    node.name: node for node in ast.walk(rate_limit_tree)
+    if isinstance(node, ast.FunctionDef)
+}
+assert {
+    "is_meta_rate_limit_error",
+    "make_rate_limit_state",
+    "seconds_remaining",
+    "format_rate_limit_message",
+} <= set(rate_limit_functions)
+assert "Application request limit reached" in rate_limit_module_source
+assert "estimated_time_to_regain_access" in rate_limit_module_source
+assert "_raise_if_meta_api_cooldown_active()" in source
+assert "make_rate_limit_state(detail, getattr(exc, \"headers\", None))" in source
+assert "delay = min(12, delay * 2)" in source
+rate_limit_tests_source = (root / "tests" / "test_meta_rate_limit.py").read_text(encoding="utf-8")
+for marker in (
+    "test_recognizes_the_reported_meta_error",
+    "test_respects_retry_after_seconds",
+    "test_uses_business_use_case_reset_estimate",
+    "test_falls_back_to_conservative_cooldown_if_meta_provides_no_reset",
+    "test_expired_cooldown_does_not_block",
+):
+    assert marker in rate_limit_tests_source, f"Missing Meta rate-limit test: {marker}"
+
 series_tests_source = (root / "tests" / "test_series_publication.py").read_text(encoding="utf-8")
 for marker in (
     "test_category_caption_names_current_and_next_service",
@@ -574,4 +604,4 @@ assert "publication_series_label" in dashboard_template
 assert "publication_series_label" in confirm_template
 assert "facebook_before_images_override" in confirm_template
 
-print("PASS: static integration checks, UTF-8 text, variable photo intake, category-specific posts, public series captions and image badges, batched visual analysis, dynamic publication splitting, Gemini config regression, structured plate detection, safe upload handling, runtime declarations, and Jinja templates.")
+print("PASS: static integration checks, UTF-8 text, variable photo intake, category-specific posts, public series captions and image badges, batched visual analysis, dynamic publication splitting, Gemini config regression, structured plate detection, safe upload handling, Meta API cooldown/backoff, runtime declarations, and Jinja templates.")
