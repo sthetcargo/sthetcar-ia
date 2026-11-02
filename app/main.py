@@ -5,6 +5,7 @@ from app.publication_split import split_photo_collections
 from app.photo_categories import group_photo_indexes, normalize_photo_categories
 from app.series_publication import build_series_badge_image, build_series_caption, build_series_title
 from app.meta_rate_limit import format_rate_limit_message, is_meta_rate_limit_error, make_rate_limit_state, seconds_remaining
+from app.analysis_progress import AnalysisProgressStore
 import copy
 import difflib
 import json
@@ -50,6 +51,20 @@ for folder in (BEFORE_DIR, AFTER_DIR, GENERATED_DIR):
 
 app = Flask(__name__)
 app.add_template_filter(format_local_datetime, "local_datetime")
+ANALYSIS_PROGRESS_STORE = AnalysisProgressStore(GENERATED_DIR / "analysis_progress")
+
+
+def _update_analysis_progress(progress_id, **values):
+    """Record best-effort operational progress without affecting the analysis itself."""
+    if not progress_id:
+        return
+    try:
+        ANALYSIS_PROGRESS_STORE.update(progress_id, **values)
+    except Exception as exc:
+        app.logger.warning(
+            "Não foi possível atualizar o indicador de análise (%s)",
+            type(exc).__name__,
+        )
 
 PUBLICATION_AUDIT_FILE = BASE_DIR / "generated" / "publicacoes_instagram.json"
 
@@ -1439,7 +1454,23 @@ def request_too_large(error):
 
 @app.route("/", methods=["GET", "POST"])
 def dashboard():
-    create_request_id = f"CREATE-{secrets.token_hex(4).upper()}" if request.method == "POST" else ""
+    progress_id = ""
+    if request.method == "POST" and request.form.get("action", "generate") != "approve":
+        progress_id = ANALYSIS_PROGRESS_STORE.valid_request_id(
+            request.form.get("analysis_request_id", "")
+        )
+    create_request_id = (
+        f"CREATE-{progress_id}" if progress_id
+        else (f"CREATE-{secrets.token_hex(4).upper()}" if request.method == "POST" else "")
+    )
+    if progress_id:
+        _update_analysis_progress(
+            progress_id,
+            status="processing",
+            stage="initializing",
+            message="Solicitação recebida. Carregando a fila e preparando a análise.",
+            percent=3,
+        )
     if create_request_id:
         app.logger.info(
             "Solicitação de criação recebida [%s], content_length=%s",
@@ -1465,6 +1496,13 @@ def dashboard():
             "Nenhum post foi criado. Atualize a página e tente novamente. "
             f"Código de diagnóstico: {diagnostic_id}."
         )
+        _update_analysis_progress(
+            progress_id,
+            status="error",
+            stage="load_state",
+            message=error,
+            percent=0,
+        )
         return render_template(
             "dashboard.html",
             result=None,
@@ -1481,6 +1519,14 @@ def dashboard():
 
     if request.method == "POST":
         action = request.form.get("action", "generate")
+        if progress_id:
+            _update_analysis_progress(
+                progress_id,
+                status="processing",
+                stage="validation",
+                message="Validando arquivos, categorias e dados do veículo.",
+                percent=6,
+            )
 
         if action == "approve":
             caption = request.form.get("caption", "").strip()
@@ -1603,21 +1649,52 @@ def dashboard():
                 before_original_urls, after_original_urls = [], []
                 stage = "salvar fotos enviadas"
                 try:
+                    total_files = len(before_files) + len(after_files)
+                    saved_files = 0
+                    _update_analysis_progress(
+                        progress_id,
+                        status="processing",
+                        stage="server_upload",
+                        message=f"Salvando {total_files} foto(s) no servidor.",
+                        percent=12,
+                        completed_items=0,
+                        total_items=total_files,
+                    )
                     app.logger.info(
                         "Criação de post [%s]: iniciando salvamento de %d foto(s)",
                         create_request_id,
-                        len(before_files) + len(after_files),
+                        total_files,
                     )
                     for idx, file in enumerate(before_files, 1):
                         name = f"{stamp}_antes_{idx}_{secure_filename(file.filename)}"
                         path = BEFORE_DIR / name
                         file.save(path)
                         before_paths.append(path)
+                        saved_files += 1
+                        _update_analysis_progress(
+                            progress_id,
+                            status="processing",
+                            stage="server_upload",
+                            message=f"Salvando fotos ANTES/DEPOIS: {saved_files} de {total_files}.",
+                            percent=12 + round(10 * saved_files / max(1, total_files)),
+                            completed_items=saved_files,
+                            total_items=total_files,
+                        )
                     for idx, file in enumerate(after_files, 1):
                         name = f"{stamp}_depois_{idx}_{secure_filename(file.filename)}"
                         path = AFTER_DIR / name
                         file.save(path)
                         after_paths.append(path)
+                        saved_files += 1
+                        _update_analysis_progress(
+                            progress_id,
+                            status="processing",
+                            stage="server_upload",
+                            message=f"Salvando fotos ANTES/DEPOIS: {saved_files} de {total_files}.",
+                            percent=12 + round(10 * saved_files / max(1, total_files)),
+                            completed_items=saved_files,
+                            total_items=total_files,
+                        )
 
                     saved_paths = before_paths + after_paths
                     total_saved = sum(path.stat().st_size for path in saved_paths if path.exists())
@@ -1638,6 +1715,15 @@ def dashboard():
                     # Keep each Gemini vision request bounded to small image batches.
                     # Never overwrite the uploaded copies; protection writes separate squares.
                     stage = "proteger placas"
+                    _update_analysis_progress(
+                        progress_id,
+                        status="processing",
+                        stage="plate_protection",
+                        message=f"Protegendo as placas das {len(before_paths) + len(after_paths)} fotos. Esta etapa pode demorar um pouco.",
+                        percent=28,
+                        completed_items=0,
+                        total_items=len(before_paths) + len(after_paths),
+                    )
                     app.logger.info(
                         "Criação de post [%s]: iniciando proteção de placas",
                         create_request_id,
@@ -1649,6 +1735,15 @@ def dashboard():
                         "Criação de post [%s]: proteção concluída, fotos=%d",
                         create_request_id,
                         len(safe_paths),
+                    )
+                    _update_analysis_progress(
+                        progress_id,
+                        status="processing",
+                        stage="plate_protection",
+                        message=f"Proteção das placas concluída: {len(safe_paths)} fotos preparadas.",
+                        percent=48,
+                        completed_items=len(safe_paths),
+                        total_items=len(safe_paths),
                     )
 
                     # Analyze every service area independently so captions do not mix
@@ -1663,6 +1758,21 @@ def dashboard():
                     )
                     group_results = []
                     for group_index, group in enumerate(photo_groups, 1):
+                        group_start_percent = 50 + int((group_index - 1) * 34 / max(1, len(photo_groups)))
+                        group_end_percent = 50 + int(group_index * 34 / max(1, len(photo_groups)))
+                        _update_analysis_progress(
+                            progress_id,
+                            status="processing",
+                            stage="visual_analysis",
+                            message=(
+                                f"Analisando área {group_index} de {len(photo_groups)}: "
+                                f"{group['label']} ({len(group['before_indexes'])} ANTES e "
+                                f"{len(group['after_indexes'])} DEPOIS)."
+                            ),
+                            percent=group_start_percent,
+                            completed_items=group_index - 1,
+                            total_items=len(photo_groups),
+                        )
                         group_before_paths = [
                             safe_before_paths[index] for index in group["before_indexes"]
                         ]
@@ -1696,6 +1806,15 @@ def dashboard():
                             group_service,
                             group_notes,
                         )
+                        _update_analysis_progress(
+                            progress_id,
+                            status="processing",
+                            stage="visual_analysis",
+                            message=f"Análise visual concluída para {group['label']}. Preparando a legenda.",
+                            percent=min(group_end_percent - 5, group_start_percent + 12),
+                            completed_items=group_index - 1,
+                            total_items=len(photo_groups),
+                        )
                         resolved_vehicle = vehicle or infer_vehicle(analysis)
                         resolved_service = group_service or infer_service(analysis)
                         stage = f"gerar legenda da categoria {group['key']}"
@@ -1704,6 +1823,15 @@ def dashboard():
                         )
                         caption, hashtags = split_post(
                             post, resolved_vehicle, resolved_service
+                        )
+                        _update_analysis_progress(
+                            progress_id,
+                            status="processing",
+                            stage="caption_generation",
+                            message=f"Legenda criada para {group['label']}.",
+                            percent=group_end_percent,
+                            completed_items=group_index,
+                            total_items=len(photo_groups),
                         )
                         group_results.append({
                             "group": group,
@@ -1747,6 +1875,13 @@ def dashboard():
                     # Upload each original and protected copy exactly once. Each categorized
                     # pending post refers only to the subset assigned to that category.
                     stage = "enviar imagens ao armazenamento"
+                    _update_analysis_progress(
+                        progress_id,
+                        status="processing",
+                        stage="storage_upload",
+                        message="Enviando fotos originais e protegidas ao armazenamento seguro.",
+                        percent=86,
+                    )
                     before_original_urls = [_remote_ref_for_local(path, "before") for path in before_paths]
                     after_original_urls = [_remote_ref_for_local(path, "after") for path in after_paths]
                     before_urls = [_remote_ref_for_local(path, "before") for path in safe_before_paths]
@@ -1754,6 +1889,13 @@ def dashboard():
                     app.logger.info(
                         "Criação de post [%s]: envio ao armazenamento concluído",
                         create_request_id,
+                    )
+                    _update_analysis_progress(
+                        progress_id,
+                        status="processing",
+                        stage="storage_upload",
+                        message="Fotos armazenadas com segurança. Finalizando as prévias para revisão.",
+                        percent=94,
                     )
 
                     per_image_plate_counts = plate_redaction.get(
@@ -1861,6 +2003,15 @@ def dashboard():
                         }
                         pending_records.append(pending)
 
+                    _update_analysis_progress(
+                        progress_id,
+                        status="processing",
+                        stage="saving_review",
+                        message=f"Salvando {len(pending_records)} publicação(ões) na fila de revisão.",
+                        percent=97,
+                        completed_items=0,
+                        total_items=len(pending_records),
+                    )
                     if len(pending_records) > 1:
                         # One appointment can produce several independent posts, but
                         # no category is approved/published automatically.
@@ -1870,6 +2021,15 @@ def dashboard():
                             "Criação de post [%s]: %d publicações separadas aguardam revisão",
                             create_request_id,
                             len(pending_records),
+                        )
+                        _update_analysis_progress(
+                            progress_id,
+                            status="completed",
+                            stage="done",
+                            message=f"Concluído! {len(pending_records)} conteúdo(s) aguardam sua revisão.",
+                            percent=100,
+                            completed_items=len(pending_records),
+                            total_items=len(pending_records),
                         )
                         return redirect(url_for(
                             "review_pending",
@@ -1895,6 +2055,13 @@ def dashboard():
                         stage,
                         type(exc).__name__,
                     )
+                    _update_analysis_progress(
+                        progress_id,
+                        status="error",
+                        stage="failed",
+                        message=f"Não foi possível concluir a etapa: {stage}. {str(exc)[:260]}",
+                        percent=None,
+                    )
                     for path in before_paths + after_paths + safe_paths:
                         try:
                             if path.exists():
@@ -1902,6 +2069,24 @@ def dashboard():
                         except Exception:
                             pass
                     error = str(exc)
+
+    if progress_id and request.method == "POST" and request.form.get("action", "generate") != "approve":
+        if result:
+            _update_analysis_progress(
+                progress_id,
+                status="completed",
+                stage="done",
+                message="Concluído! O conteúdo está pronto para revisão.",
+                percent=100,
+            )
+        elif error:
+            _update_analysis_progress(
+                progress_id,
+                status="error",
+                stage="failed",
+                message=str(error),
+                percent=None,
+            )
 
     return render_template(
         "dashboard.html",
@@ -1913,6 +2098,25 @@ def dashboard():
         approval_queue=approval_queue,
         metrics=metrics,
     )
+
+
+@app.route("/analise/progresso/<progress_id>", methods=["GET"])
+def analysis_progress_status(progress_id):
+    """Return only operational progress for a short-lived, random request ID."""
+    snapshot = ANALYSIS_PROGRESS_STORE.read(progress_id)
+    if snapshot is None:
+        return {"status": "not_found", "message": "Não encontrei o andamento desta solicitação."}, 404
+    return {
+        "status": snapshot.get("status", "processing"),
+        "stage": snapshot.get("stage", ""),
+        "message": snapshot.get("message", ""),
+        "percent": snapshot.get("percent"),
+        "completed_items": snapshot.get("completed_items"),
+        "total_items": snapshot.get("total_items"),
+        "age_seconds": snapshot.get("age_seconds", 0),
+        "stale": bool(snapshot.get("stale", False)),
+        "updated_at": snapshot.get("updated_at", ""),
+    }
 
 
 @app.route("/revisar/<pending_id>")
