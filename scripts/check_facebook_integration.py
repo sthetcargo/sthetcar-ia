@@ -424,6 +424,10 @@ for marker in (
 ):
     assert marker in dashboard_template, f"Dashboard is missing live progress behavior: {marker}"
 
+assert "uploadForm.getAttribute('action')" in dashboard_template
+assert "xhr.open('POST',uploadUrl,true)" in dashboard_template
+assert "xhr.open('POST',uploadForm.action" not in dashboard_template
+
 gemini_path = root / "app" / "ai" / "gemini.py"
 gemini_source = gemini_path.read_text(encoding="utf-8")
 gemini_tree = ast.parse(gemini_source, filename=str(gemini_path))
