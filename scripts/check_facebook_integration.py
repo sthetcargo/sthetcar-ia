@@ -76,6 +76,16 @@ for field in ('"caption"', '"hashtags"', '"vehicle"', '"service"', '"approved_at
     assert field in draft_matcher, f"Draft matcher is missing {field}"
 assert "fallback_hashtags(" in draft_matcher, "Draft matcher must mirror the existing fallback hashtag behavior"
 
+# One Instagram preparation action is enough: test_media builds a draft when needed,
+# then creates/polls the Instagram media container without publishing it.
+instagram_template = template_path.read_text(encoding="utf-8")
+assert "url_for('instagram_prepare')" not in instagram_template
+assert "url_for('instagram_test_media')" in instagram_template
+assert "Preparar e validar mídia (sem publicar)" in instagram_template
+instagram_test_source = ast.get_source_segment(source, function_nodes["instagram_test_media"])
+assert "if not draft_matches" in instagram_test_source
+assert "build_publication_draft(post, post_index, connection)" in instagram_test_source
+
 # Facebook Login for Business must use the saved configuration ID, not a scope list.
 login_start = source.index('def facebook_login():')
 login_end = source.index('\n\n@app.route("/auth/facebook/callback")', login_start)
