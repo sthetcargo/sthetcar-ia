@@ -101,13 +101,12 @@ body{font-family:Arial,sans-serif;background:#f5f6f8;color:#20242b;margin:0}.wra
 {% if already_published %}
 <span class="btn green">🛡️ PUBLICAÇÃO BLOQUEADA — JÁ PUBLICADO</span>
 {% else %}
-<form method="post" action="{{ url_for('instagram_prepare') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn green" type="submit">📦 Preparar publicação</button></form>
 {% if draft and draft_matches_selected and draft.status == 'PUBLICADO NO INSTAGRAM' %}
 <span class="btn green">✅ PUBLICADO NO INSTAGRAM</span>
 {% elif draft and draft_matches_selected and draft.container_id %}
 <form method="post" action="{{ url_for('instagram_publish') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn publish" type="submit">🔎 REVISAR E CONFIRMAR NO INSTAGRAM</button></form>
 {% else %}
-<form method="post" action="{{ url_for('instagram_test_media') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn blue" type="submit">🧪 Preparar e testar mídia (sem publicar)</button></form>
+<form method="post" action="{{ url_for('instagram_test_media') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="post_index" value="{{ post_index }}"><button class="btn blue" type="submit">🧪 Preparar e validar mídia (sem publicar)</button></form>
 {% endif %}
 {% endif %}
 <form method="post" action="{{ url_for('instagram_disconnect') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn secondary" type="submit">🔌 Desconectar Instagram</button></form>
@@ -118,7 +117,7 @@ body{font-family:Arial,sans-serif;background:#f5f6f8;color:#20242b;margin:0}.wra
 {% endif %}
 </div>
 
-<div class="notice">🔒 <strong>Regra de segurança:</strong> preparar e testar a mídia <strong>não publica</strong>. Toda publicação real exige confirmação explícita; o aplicativo valida o post selecionado e bloqueia duplicações por plataforma.</div>
+<div class="notice">🔒 <strong>Regra de segurança:</strong> preparar e validar a mídia <strong>não publica</strong>. Toda publicação real exige confirmação explícita; o aplicativo valida o post selecionado e bloqueia duplicações por plataforma.</div>
 
 {% set instagram_media_ready = draft_matches_selected and draft and draft.container_id and draft.container_status and (draft.container_status.status_code or '').upper() == 'FINISHED' %}
 {% if post and ((connection and connection.username and not already_published) or (facebook_connection and facebook_connection.page_id and not facebook_already_published)) %}
