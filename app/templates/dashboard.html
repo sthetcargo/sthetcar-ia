@@ -624,7 +624,8 @@
 
           setProgress(10,'Enviando fotos ao servidor','Mídias prontas: '+formatMB(total)+'. Enviando ANTES, DEPOIS e categorias.');
           const xhr=new XMLHttpRequest();
-          xhr.open('POST',uploadForm.action||window.location.pathname||'/',true);
+          const uploadUrl=uploadForm.getAttribute('action') || window.location.pathname || '/';
+          xhr.open('POST',uploadUrl,true);
           xhr.timeout=330000;
           stopPolling=startProgressPolling(requestId);
           requestSent=true;
