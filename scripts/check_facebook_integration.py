@@ -360,8 +360,8 @@ assert "item.created_at.replace('T',' ')" not in dashboard_template
 assert "item.publication.published_at.replace('T',' ')" not in publication_queue_template
 
 
-# The Gunicorn sync-worker default is 30 seconds. Keep AI image-generation requests
-# bounded but allow time for multiple external model calls in one post.
+# Gunicorn must serve progress-poll GETs in parallel with synchronous analysis POSTs.
+# Use a single process and a small thread pool to avoid multiplying image memory.
 gunicorn_config_path = root / "gunicorn.conf.py"
 gunicorn_source = gunicorn_config_path.read_text(encoding="utf-8")
 gunicorn_tree = ast.parse(gunicorn_source, filename=str(gunicorn_config_path))
@@ -373,8 +373,56 @@ gunicorn_assignments = {
     and isinstance(node.targets[0], ast.Name)
     and isinstance(node.value, ast.Constant)
 }
-assert gunicorn_assignments.get("timeout") == 180
+assert gunicorn_assignments.get("worker_class") == "gthread"
+assert gunicorn_assignments.get("workers") == 1
+assert gunicorn_assignments.get("threads") == 4
+assert gunicorn_assignments.get("timeout") == 360
 assert gunicorn_assignments.get("graceful_timeout") == 30
+
+# Analysis progress must be reported by the synchronous route and pollable in parallel.
+progress_module_path = root / "app" / "analysis_progress.py"
+progress_module_source = progress_module_path.read_text(encoding="utf-8")
+progress_tree = ast.parse(progress_module_source, filename=str(progress_module_path))
+progress_functions = {
+    node.name for node in ast.walk(progress_tree)
+    if isinstance(node, ast.FunctionDef)
+}
+assert {"update", "read", "valid_request_id"} <= progress_functions
+progress_tests_source = (root / "tests" / "test_analysis_progress.py").read_text(encoding="utf-8")
+for marker in (
+    "test_update_and_read_progress_snapshot",
+    "test_long_stage_is_reported_as_stale_without_marking_job_failed",
+    "test_completion_is_100_percent_and_not_stale",
+    "test_invalid_identifiers_cannot_escape_progress_directory",
+):
+    assert marker in progress_tests_source, f"Missing analysis progress test: {marker}"
+
+progress_route_source = ast.get_source_segment(source, function_nodes["analysis_progress_status"])
+assert 'ANALYSIS_PROGRESS_STORE.read(progress_id)' in progress_route_source
+dashboard_route_source = ast.get_source_segment(source, function_nodes["dashboard"])
+for marker in (
+    'stage="server_upload"',
+    'stage="plate_protection"',
+    'stage="visual_analysis"',
+    'stage="caption_generation"',
+    'stage="storage_upload"',
+    'stage="saving_review"',
+    'status="completed"',
+    'status="error"',
+):
+    assert marker in dashboard_route_source, f"Missing server-side progress stage: {marker}"
+
+assert 'name="analysis_request_id"' in dashboard_template
+for marker in (
+    "new XMLHttpRequest()",
+    "xhr.upload.addEventListener('progress'",
+    "startProgressPolling(requestId)",
+    "/analise/progresso/",
+    "uploadProgressFill",
+    "uploadProgressElapsed",
+    "data.stale",
+):
+    assert marker in dashboard_template, f"Dashboard is missing live progress behavior: {marker}"
 
 gemini_path = root / "app" / "ai" / "gemini.py"
 gemini_source = gemini_path.read_text(encoding="utf-8")
