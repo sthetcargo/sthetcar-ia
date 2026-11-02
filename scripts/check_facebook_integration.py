@@ -82,7 +82,9 @@ instagram_template = template_path.read_text(encoding="utf-8")
 assert "url_for('instagram_prepare')" not in instagram_template
 assert "url_for('instagram_test_media')" in instagram_template
 assert "Preparar e validar mídia (sem publicar)" in instagram_template
-instagram_test_source = ast.get_source_segment(source, function_nodes["instagram_test_media"])
+instagram_test_start = source.index("def instagram_test_media(")
+instagram_test_end = source.index("\n\nPENDING_PUBLICATION_CONFIRMATION_TTL_SECONDS", instagram_test_start)
+instagram_test_source = source[instagram_test_start:instagram_test_end]
 assert "if not draft_matches" in instagram_test_source
 assert "build_publication_draft(post, post_index, connection)" in instagram_test_source
 
